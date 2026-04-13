@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -48,7 +49,14 @@ func PostToolUse(stdin io.Reader) error {
 		return nil
 	}
 
-	fmt.Printf("Run `gh watch pr %s --exit --json` as a background task (Bash with run_in_background) to monitor this PR for CI status, reviews, and other changes.\n", prNumber)
+	// Output JSON with "decision":"block" so Claude Code surfaces the message.
+	// Plain text and "additionalContext" are silently ignored.
+	// "block" feeds the reason back to Claude as visible context it can act on.
+	response := map[string]string{
+		"decision": "block",
+		"reason":   fmt.Sprintf("Run `gh watch pr %s --exit --json` as a background task (Bash with run_in_background) to monitor this PR for CI status, reviews, and other changes.", prNumber),
+	}
+	json.NewEncoder(os.Stdout).Encode(response)
 	return nil
 }
 
