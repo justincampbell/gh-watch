@@ -94,6 +94,21 @@ A human-friendly summary is printed to **stderr** (unless `--json` is used):
 | `pr-merged` | The PR was merged (terminal) |
 | `pr-closed` | The PR was closed (terminal) |
 
+## Development
+
+Build and install from local source:
+
+```
+gh extension install .
+go build -o "$(gh extension list | grep watch | awk '{print $NF}')/gh-watch" .
+```
+
+Run after making changes:
+
+```
+go build -o "$(gh extension list | grep watch | awk '{print $NF}')/gh-watch" . && gh watch pr
+```
+
 ## Releasing
 
 Push a version tag to trigger the release workflow, which cross-compiles binaries for all platforms via `cli/gh-extension-precompile`:

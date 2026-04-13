@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -22,7 +21,7 @@ var gitPushRe = regexp.MustCompile(`git\s+push`)
 
 // PostToolUse handles the PostToolUse hook event.
 // It checks if the Bash command was a git push, detects the PR,
-// and starts gh watch pr in the background.
+// and outputs a message telling Claude to run gh watch pr as a background task.
 func PostToolUse(stdin io.Reader) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
@@ -38,11 +37,6 @@ func PostToolUse(stdin io.Reader) error {
 		return nil
 	}
 
-	// Check if gh watch is available
-	if _, err := exec.LookPath("gh"); err != nil {
-		return nil
-	}
-
 	// Check if there's already a watcher running
 	if isWatcherRunning() {
 		return nil
@@ -54,22 +48,7 @@ func PostToolUse(stdin io.Reader) error {
 		return nil
 	}
 
-	// Start watcher in background
-	cmd := exec.Command("gh", "watch", "pr", prNumber, "--json")
-	logFile := fmt.Sprintf("/tmp/gh-watch-pr-%s.log", prNumber)
-	f, err := os.Create(logFile)
-	if err != nil {
-		return nil
-	}
-	cmd.Stdout = f
-	cmd.Stderr = f
-
-	if err := cmd.Start(); err != nil {
-		f.Close()
-		return nil
-	}
-
-	fmt.Fprintf(os.Stdout, "Started watching PR #%s in the background (pid %d)\n", prNumber, cmd.Process.Pid)
+	fmt.Printf("Run `gh watch pr %s --exit --json` as a background task (Bash with run_in_background) to monitor this PR for CI status, reviews, and other changes.\n", prNumber)
 	return nil
 }
 
