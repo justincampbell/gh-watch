@@ -38,16 +38,16 @@ gh watch pr
 
 ### Common patterns
 
-**Wait for CI to finish (most common):**
+**Watch until something changes (most common for background monitoring):**
+
+```
+gh watch pr $ARGUMENTS --exit --json
+```
+
+**Wait for CI to pass specifically:**
 
 ```
 gh watch pr $ARGUMENTS --exit-on ci-passed --json
-```
-
-**Exit on any change:**
-
-```
-gh watch pr $ARGUMENTS --exit
 ```
 
 **Poll faster (every 30 seconds):**

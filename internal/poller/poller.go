@@ -49,6 +49,9 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 		}
 
 		for _, e := range detected {
+			if e.Event == events.InitialState {
+				continue
+			}
 			if cfg.IsTerminal != nil && cfg.IsTerminal(e) {
 				return nil
 			}
