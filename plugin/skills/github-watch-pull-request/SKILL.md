@@ -38,34 +38,28 @@ gh watch pr
 
 ### Common patterns
 
+**Exit on any change (most common):**
+
+```
+gh watch pr $ARGUMENTS --exit
+```
+
 **Wait for CI to pass, then exit:**
 
 ```
 gh watch pr $ARGUMENTS --exit-on ci-passed
 ```
 
-**Wait for CI to complete (pass or fail), then exit:**
-
-```
-gh watch pr $ARGUMENTS --exit-on ci-passed --exit-on ci-failed
-```
-
 **Poll faster (every 30 seconds):**
 
 ```
-gh watch pr $ARGUMENTS --interval 30s
-```
-
-**Exit on any change:**
-
-```
-gh watch pr $ARGUMENTS --exit
+gh watch pr $ARGUMENTS --exit --interval 30s
 ```
 
 **JSON-only output (suppress human-friendly stderr):**
 
 ```
-gh watch pr $ARGUMENTS --json
+gh watch pr $ARGUMENTS --exit --json
 ```
 
 ## Flags
@@ -105,7 +99,7 @@ The process automatically exits on terminal events (`pr-merged`, `pr-closed`).
 
 ## Recommended workflow
 
-1. Start watching in the background or in a separate terminal
-2. Use `--exit-on ci-passed` when you only need to wait for CI
+1. Default to `--exit` — it exits after the first state change, which is usually what you want
+2. Use `--exit-on ci-passed` only when you specifically need to wait for all CI to go green
 3. Use `--json` when parsing output programmatically
 4. The default 60s poll interval is respectful of API rate limits — use shorter intervals only when actively waiting
