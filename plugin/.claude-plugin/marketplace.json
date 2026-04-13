@@ -1,0 +1,13 @@
+{
+  "name": "github-watch",
+  "owner": {
+    "name": "Justin Campbell"
+  },
+  "plugins": [
+    {
+      "name": "github-watch",
+      "source": "./",
+      "description": "Watch GitHub pull requests for CI status, reviews, comments, and merge conflicts. Auto-watches after git push."
+    }
+  ]
+}
