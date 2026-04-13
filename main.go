@@ -32,7 +32,7 @@ func main() {
 
 	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
 	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output (suppress stderr human-friendly lines)")
-	rootCmd.PersistentFlags().StringVar(&exitOn, "exit-on", "", "Exit after a specific event type (e.g. ci-passed)")
+	rootCmd.PersistentFlags().StringVar(&exitOn, "exit-on", "", `Exit after a specific event type (e.g. ci-passed, or "any")`)
 	rootCmd.SilenceUsage = true
 
 	prCmd := &cobra.Command{

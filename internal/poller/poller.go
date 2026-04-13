@@ -52,7 +52,7 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 			if cfg.IsTerminal != nil && cfg.IsTerminal(e) {
 				return nil
 			}
-			if cfg.ExitOn != "" && e.Event == cfg.ExitOn {
+			if cfg.ExitOn != "" && (cfg.ExitOn == events.AnyEvent || e.Event == cfg.ExitOn) {
 				return nil
 			}
 		}

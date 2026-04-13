@@ -56,6 +56,12 @@ gh watch pr $ARGUMENTS --exit-on ci-passed --exit-on ci-failed
 gh watch pr $ARGUMENTS --interval 30s
 ```
 
+**Exit on any change:**
+
+```
+gh watch pr $ARGUMENTS --exit-on any
+```
+
 **JSON-only output (suppress human-friendly stderr):**
 
 ```
@@ -76,6 +82,7 @@ These are the `--exit-on` values and the events emitted as JSON:
 
 | Event | Description |
 |-------|-------------|
+| `any` | Exit on any event |
 | `ci-status-changed` | A check run transitioned state |
 | `ci-passed` | All CI checks are passing |
 | `ci-failed` | A required check has failed |

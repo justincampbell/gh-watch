@@ -48,6 +48,12 @@ Wait for CI to pass, then exit:
 gh watch pr 42 --exit-on ci-passed
 ```
 
+Exit on any change:
+
+```
+gh watch pr 42 --exit-on any
+```
+
 JSON-only output for machine consumption:
 
 ```
@@ -77,6 +83,7 @@ A human-friendly summary is printed to **stderr** (unless `--json` is used):
 
 | Event | Description |
 |-------|-------------|
+| `any` | Exit on any event (for `--exit-on`) |
 | `ci-status-changed` | A check run transitioned state |
 | `ci-passed` | All required checks are passing |
 | `ci-failed` | A required check has failed |

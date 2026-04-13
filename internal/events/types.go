@@ -6,6 +6,7 @@ import "time"
 type EventType string
 
 const (
+	AnyEvent             EventType = "any"
 	CIStatusChanged      EventType = "ci-status-changed"
 	CIAllPassed          EventType = "ci-passed"
 	CIFailed             EventType = "ci-failed"
