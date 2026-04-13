@@ -1,4 +1,4 @@
-module github.com/justincampbell/gh-watch-pr
+module github.com/justincampbell/gh-watch
 
 go 1.25.3
 

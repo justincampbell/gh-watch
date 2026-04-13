@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/justincampbell/gh-watch-pr/internal/events"
+	"github.com/justincampbell/gh-watch/internal/events"
 )
 
 // Writer handles formatting events to stdout (JSON) and stderr (human-friendly).

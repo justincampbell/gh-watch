@@ -3,7 +3,7 @@ package events
 import (
 	"testing"
 
-	"github.com/justincampbell/gh-watch-pr/internal/pr"
+	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
 func TestDiff_NilOld_OpenPR(t *testing.T) {

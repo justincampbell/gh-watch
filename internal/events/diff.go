@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/justincampbell/gh-watch-pr/internal/pr"
+	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
 // Diff compares old and new PR states and returns detected events.

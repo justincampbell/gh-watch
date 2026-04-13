@@ -1,20 +1,24 @@
-# gh-watch-pr
+# gh-watch
 
-A [gh](https://cli.github.com/) CLI extension that monitors a pull request and reports state changes as they occur.
+A [gh](https://cli.github.com/) CLI extension that watches GitHub resources for state changes.
 
 ## Installation
 
 ```
-gh extension install justincampbell/gh-watch-pr
+gh extension install justincampbell/gh-watch
 ```
 
 ## Usage
 
 ```
-gh watch-pr [<number>] [flags]
+gh watch <command> [flags]
 ```
 
-If no PR number is given, the PR for the current branch is detected automatically.
+### Commands
+
+#### `gh watch pr [<number>] [flags]`
+
+Watch a pull request for state changes. If no PR number is given, the PR for the current branch is detected automatically.
 
 ### Flags
 
@@ -29,25 +33,25 @@ If no PR number is given, the PR for the current branch is detected automaticall
 Watch PR #42 with default polling:
 
 ```
-gh watch-pr 42
+gh watch pr 42
 ```
 
 Watch the current branch's PR, polling every 30 seconds:
 
 ```
-gh watch-pr --interval 30s
+gh watch pr --interval 30s
 ```
 
 Wait for CI to pass, then exit:
 
 ```
-gh watch-pr 42 --exit-on ci-passed
+gh watch pr 42 --exit-on ci-passed
 ```
 
 JSON-only output for machine consumption:
 
 ```
-gh watch-pr 42 --json
+gh watch pr 42 --json
 ```
 
 ## Output Format

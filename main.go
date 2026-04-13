@@ -11,10 +11,10 @@ import (
 
 	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
-	"github.com/justincampbell/gh-watch-pr/internal/events"
-	"github.com/justincampbell/gh-watch-pr/internal/output"
-	"github.com/justincampbell/gh-watch-pr/internal/poller"
-	"github.com/justincampbell/gh-watch-pr/internal/pr"
+	"github.com/justincampbell/gh-watch/internal/events"
+	"github.com/justincampbell/gh-watch/internal/output"
+	"github.com/justincampbell/gh-watch/internal/poller"
+	"github.com/justincampbell/gh-watch/internal/pr"
 	"github.com/spf13/cobra"
 )
 
@@ -25,8 +25,18 @@ func main() {
 		exitOn   string
 	)
 
-	cmd := &cobra.Command{
-		Use:   "watch-pr [<number>]",
+	rootCmd := &cobra.Command{
+		Use:   "watch",
+		Short: "Watch GitHub resources for state changes",
+	}
+
+	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
+	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output (suppress stderr human-friendly lines)")
+	rootCmd.PersistentFlags().StringVar(&exitOn, "exit-on", "", "Exit after a specific event type (e.g. ci-passed)")
+	rootCmd.SilenceUsage = true
+
+	prCmd := &cobra.Command{
+		Use:   "pr [<number>]",
 		Short: "Watch a pull request for state changes",
 		Long:  "Monitors a pull request, polling for changes and printing updates as they occur.",
 		Args:  cobra.MaximumNArgs(1),
@@ -70,11 +80,18 @@ func main() {
 				exitOnEvent = events.EventType(exitOn)
 			}
 
-			return poller.Run(ctx, poller.Config{
-				Owner:   owner,
-				Repo:    repoName,
-				Number:  number,
-				Fetcher: pr.NewFetcher(),
+			fetcher := pr.NewFetcher()
+
+			return poller.Run(ctx, poller.Config[pr.State]{
+				Fetch: func() (*pr.State, error) {
+					return fetcher.Fetch(owner, repoName, number)
+				},
+				Diff: func(old, new *pr.State) []events.Event {
+					return events.Diff(old, new)
+				},
+				IsTerminal: func(e events.Event) bool {
+					return e.Event == events.PRMerged || e.Event == events.PRClosed
+				},
 				Strategy: &poller.FixedStrategy{
 					Duration: interval,
 				},
@@ -84,13 +101,9 @@ func main() {
 		},
 	}
 
-	cmd.Flags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
-	cmd.Flags().BoolVar(&jsonOnly, "json", false, "JSON-only output (suppress stderr human-friendly lines)")
-	cmd.Flags().StringVar(&exitOn, "exit-on", "", "Exit after a specific event type (e.g. ci-passed)")
+	rootCmd.AddCommand(prCmd)
 
-	cmd.SilenceUsage = true
-
-	if err := cmd.Execute(); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
