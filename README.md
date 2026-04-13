@@ -26,6 +26,7 @@ Watch a pull request for state changes. If no PR number is given, the PR for the
 |------|-------------|---------|
 | `--interval` | Polling interval | `60s` |
 | `--json` | JSON-only output (suppress human-friendly stderr) | `false` |
+| `--exit` | Exit after any state change | `false` |
 | `--exit-on` | Exit after a specific event type | |
 
 ### Examples
@@ -51,7 +52,7 @@ gh watch pr 42 --exit-on ci-passed
 Exit on any change:
 
 ```
-gh watch pr 42 --exit-on any
+gh watch pr 42 --exit
 ```
 
 JSON-only output for machine consumption:

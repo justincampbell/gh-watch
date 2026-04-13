@@ -22,6 +22,7 @@ func main() {
 	var (
 		interval time.Duration
 		jsonOnly bool
+		exit     bool
 		exitOn   string
 	)
 
@@ -32,6 +33,7 @@ func main() {
 
 	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
 	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output (suppress stderr human-friendly lines)")
+	rootCmd.PersistentFlags().BoolVar(&exit, "exit", false, "Exit after any state change (shorthand for --exit-on any)")
 	rootCmd.PersistentFlags().StringVar(&exitOn, "exit-on", "", `Exit after a specific event type (e.g. ci-passed, or "any")`)
 	rootCmd.SilenceUsage = true
 
@@ -76,7 +78,9 @@ func main() {
 			defer cancel()
 
 			var exitOnEvent events.EventType
-			if exitOn != "" {
+			if exit && exitOn == "" {
+				exitOnEvent = events.AnyEvent
+			} else if exitOn != "" {
 				exitOnEvent = events.EventType(exitOn)
 			}
 

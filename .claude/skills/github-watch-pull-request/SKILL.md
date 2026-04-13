@@ -59,7 +59,7 @@ gh watch pr $ARGUMENTS --interval 30s
 **Exit on any change:**
 
 ```
-gh watch pr $ARGUMENTS --exit-on any
+gh watch pr $ARGUMENTS --exit
 ```
 
 **JSON-only output (suppress human-friendly stderr):**
@@ -74,6 +74,7 @@ gh watch pr $ARGUMENTS --json
 |------|-------------|---------|
 | `--interval <duration>` | Polling interval | `60s` |
 | `--json` | JSON-only output (suppress stderr) | `false` |
+| `--exit` | Exit after any state change | `false` |
 | `--exit-on <event>` | Exit after a specific event type | |
 
 ## Event types
