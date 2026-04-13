@@ -7,6 +7,7 @@ type EventType string
 
 const (
 	AnyEvent             EventType = "any"
+	InitialState         EventType = "initial-state"
 	CIStatusChanged      EventType = "ci-status-changed"
 	CIAllPassed          EventType = "ci-passed"
 	CIFailed             EventType = "ci-failed"

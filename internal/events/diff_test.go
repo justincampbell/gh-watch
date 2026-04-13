@@ -7,10 +7,46 @@ import (
 )
 
 func TestDiff_NilOld_OpenPR(t *testing.T) {
-	state := &pr.State{Number: 1, Status: "open"}
+	state := &pr.State{Number: 1, Title: "Test PR", Status: "open"}
 	events := Diff(nil, state)
-	if len(events) != 0 {
-		t.Errorf("expected no events for initial open PR, got %d", len(events))
+	if len(events) != 1 {
+		t.Fatalf("expected 1 initial-state event, got %d", len(events))
+	}
+	if events[0].Event != InitialState {
+		t.Errorf("expected InitialState, got %s", events[0].Event)
+	}
+}
+
+func TestDiff_NilOld_InitialStateWithChecks(t *testing.T) {
+	state := &pr.State{
+		Number: 42,
+		Title:  "Add feature",
+		Status: "open",
+		CheckRuns: []pr.CheckRun{
+			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
+			{Name: "build", Status: "QUEUED", Conclusion: ""},
+		},
+		Reviews: []pr.Review{
+			{Author: "alice", State: "APPROVED"},
+		},
+	}
+	events := Diff(nil, state)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	e := events[0]
+	if e.Event != InitialState {
+		t.Errorf("expected InitialState, got %s", e.Event)
+	}
+	if e.Details["passed"] != 1 {
+		t.Errorf("expected 1 passed, got %v", e.Details["passed"])
+	}
+	if e.Details["pending"] != 2 {
+		t.Errorf("expected 2 pending, got %v", e.Details["pending"])
+	}
+	if e.Details["reviews"] != 1 {
+		t.Errorf("expected 1 review, got %v", e.Details["reviews"])
 	}
 }
 

@@ -54,7 +54,7 @@ func PostToolUse(stdin io.Reader) error {
 	// "block" feeds the reason back to Claude as visible context it can act on.
 	response := map[string]string{
 		"decision": "block",
-		"reason":   fmt.Sprintf("Run `gh watch pr %s --exit --json` as a background task (Bash with run_in_background) to monitor this PR for CI status, reviews, and other changes.", prNumber),
+		"reason":   fmt.Sprintf("Run `gh watch pr %s --exit-on ci-passed --json` as a background task (Bash with run_in_background) to monitor this PR until CI passes or fails.", prNumber),
 	}
 	json.NewEncoder(os.Stdout).Encode(response)
 	return nil

@@ -38,7 +38,13 @@ gh watch pr
 
 ### Common patterns
 
-**Exit on any change (most common):**
+**Wait for CI to finish (most common):**
+
+```
+gh watch pr $ARGUMENTS --exit-on ci-passed --json
+```
+
+**Exit on any change:**
 
 ```
 gh watch pr $ARGUMENTS --exit
@@ -63,6 +69,7 @@ gh watch pr $ARGUMENTS --exit --json
 | `--interval <duration>` | Polling interval | `60s` |
 | `--json` | JSON-only output (suppress stderr) | `false` |
 | `--exit` | Exit after any state change | `false` |
+| `--exit-on <event>` | Exit after a specific event (e.g. `ci-passed`, `ci-failed`) | |
 
 ## Output format
 

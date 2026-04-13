@@ -35,6 +35,7 @@ func Diff(old, new *pr.State) []Event {
 	}
 
 	if old == nil {
+		events = append(events, initialStateEvent(new, now))
 		return events
 	}
 
@@ -150,6 +151,82 @@ func Diff(old, new *pr.State) []Event {
 	}
 
 	return events
+}
+
+func initialStateEvent(state *pr.State, now time.Time) Event {
+	var parts []string
+
+	// CI summary
+	completed, passed, failed, pending := 0, 0, 0, 0
+	for _, c := range state.CheckRuns {
+		if c.Status == "COMPLETED" {
+			completed++
+			if c.Conclusion == "SUCCESS" || c.Conclusion == "NEUTRAL" {
+				passed++
+			} else {
+				failed++
+			}
+		} else {
+			pending++
+		}
+	}
+	if len(state.CheckRuns) > 0 {
+		if pending > 0 {
+			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d pending", passed, len(state.CheckRuns), pending))
+		} else if failed > 0 {
+			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d failed", passed, len(state.CheckRuns), failed))
+		} else {
+			parts = append(parts, fmt.Sprintf("CI: all %d checks passed", len(state.CheckRuns)))
+		}
+	}
+
+	// Reviews summary
+	if len(state.Reviews) > 0 {
+		approved, changesRequested := 0, 0
+		for _, r := range state.Reviews {
+			switch r.State {
+			case "APPROVED":
+				approved++
+			case "CHANGES_REQUESTED":
+				changesRequested++
+			}
+		}
+		if changesRequested > 0 {
+			parts = append(parts, fmt.Sprintf("%d reviews (%d approved, %d changes requested)", len(state.Reviews), approved, changesRequested))
+		} else if approved > 0 {
+			parts = append(parts, fmt.Sprintf("%d reviews (%d approved)", len(state.Reviews), approved))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d reviews", len(state.Reviews)))
+		}
+	}
+
+	// Mergeable
+	if state.Mergeable == "CONFLICTING" {
+		parts = append(parts, "has merge conflicts")
+	}
+
+	summary := fmt.Sprintf("PR #%d: %s", state.Number, state.Title)
+	if len(parts) > 0 {
+		summary += " — " + strings.Join(parts, ", ")
+	}
+
+	return Event{
+		Timestamp: now,
+		Event:     InitialState,
+		Summary:   summary,
+		Details: map[string]interface{}{
+			"number":    state.Number,
+			"title":     state.Title,
+			"status":    state.Status,
+			"mergeable": state.Mergeable,
+			"checks":    len(state.CheckRuns),
+			"passed":    passed,
+			"failed":    failed,
+			"pending":   pending,
+			"reviews":   len(state.Reviews),
+			"comments":  len(state.Comments),
+		},
+	}
 }
 
 func buildCheckMap(checks []pr.CheckRun) map[string]pr.CheckRun {
