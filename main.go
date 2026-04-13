@@ -12,6 +12,7 @@ import (
 	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/justincampbell/gh-watch/internal/events"
+	"github.com/justincampbell/gh-watch/internal/hook"
 	"github.com/justincampbell/gh-watch/internal/output"
 	"github.com/justincampbell/gh-watch/internal/poller"
 	"github.com/justincampbell/gh-watch/internal/pr"
@@ -105,7 +106,23 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(prCmd)
+	hookCmd := &cobra.Command{
+		Use:    "hook",
+		Short:  "Hook subcommands for Claude Code integration",
+		Hidden: true,
+	}
+
+	hookPostToolUseCmd := &cobra.Command{
+		Use:   "post-tool-use",
+		Short: "Handle PostToolUse hook events",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return hook.PostToolUse(os.Stdin)
+		},
+	}
+
+	hookCmd.AddCommand(hookPostToolUseCmd)
+	rootCmd.AddCommand(prCmd, hookCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
