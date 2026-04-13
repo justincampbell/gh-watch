@@ -82,6 +82,17 @@ A human-friendly summary is printed to **stderr** (unless `--json` is used):
 | `pr-merged` | The PR was merged (terminal) |
 | `pr-closed` | The PR was closed (terminal) |
 
+## Releasing
+
+Push a version tag to trigger the release workflow, which cross-compiles binaries for all platforms via `cli/gh-extension-precompile`:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Tags with hyphens (e.g. `v0.2.0-rc.1`) are published as prereleases.
+
 ## License
 
 MIT
