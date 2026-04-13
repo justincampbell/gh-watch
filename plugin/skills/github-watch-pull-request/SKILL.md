@@ -44,12 +44,6 @@ gh watch pr
 gh watch pr $ARGUMENTS --exit
 ```
 
-**Wait for CI to pass, then exit:**
-
-```
-gh watch pr $ARGUMENTS --exit-on ci-passed
-```
-
 **Poll faster (every 30 seconds):**
 
 ```
@@ -69,23 +63,6 @@ gh watch pr $ARGUMENTS --exit --json
 | `--interval <duration>` | Polling interval | `60s` |
 | `--json` | JSON-only output (suppress stderr) | `false` |
 | `--exit` | Exit after any state change | `false` |
-| `--exit-on <event>` | Exit after a specific event type | |
-
-## Event types
-
-These are the `--exit-on` values and the events emitted as JSON:
-
-| Event | Description |
-|-------|-------------|
-| `any` | Exit on any event |
-| `ci-status-changed` | A check run transitioned state |
-| `ci-passed` | All CI checks are passing |
-| `ci-failed` | A required check has failed |
-| `review-submitted` | A review was submitted |
-| `comment-added` | A new comment was posted |
-| `merge-conflict-changed` | The PR's mergeable state changed |
-| `pr-merged` | The PR was merged (terminal — auto exits) |
-| `pr-closed` | The PR was closed (terminal — auto exits) |
 
 ## Output format
 
@@ -100,6 +77,5 @@ The process automatically exits on terminal events (`pr-merged`, `pr-closed`).
 ## Recommended workflow
 
 1. Default to `--exit` — it exits after the first state change, which is usually what you want
-2. Use `--exit-on ci-passed` only when you specifically need to wait for all CI to go green
-3. Use `--json` when parsing output programmatically
-4. The default 60s poll interval is respectful of API rate limits — use shorter intervals only when actively waiting
+2. Use `--json` when parsing output programmatically
+3. The default 60s poll interval is respectful of API rate limits — use shorter intervals only when actively waiting
