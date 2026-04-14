@@ -12,4 +12,4 @@ gh extension install justincampbell/gh-watch
 
 ## Usage
 
-Use the `/github-watch-pull-request` skill to monitor a PR after pushing code or when waiting for CI/reviews.
+Use the `/watch-pr` skill to monitor a PR after pushing code or when waiting for CI/reviews.

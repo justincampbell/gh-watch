@@ -29,7 +29,7 @@ Run as a **background task** (Bash with `run_in_background: true`). Always use `
 **Wait for CI to finish (pass or fail):**
 
 ```
-gh watch pr $ARGUMENTS --exit-on ci-passed --exit-on ci-failed
+gh watch pr $ARGUMENTS --exit-on ci-passed,ci-failed
 ```
 
 **Wait for a code review:**
@@ -52,7 +52,7 @@ If no PR number is provided, the PR for the current branch is detected automatic
 |------|-------------|---------|
 | `--interval <duration>` | Polling interval | `60s` |
 | `--exit` | Exit after any state change | `false` |
-| `--exit-on <event>` | Exit after a specific event type | |
+| `--exit-on <events>` | Exit after specific event types (comma-separated) | |
 
 ## Event types
 

@@ -26,7 +26,7 @@ Watch a pull request for state changes. If no PR number is given, the PR for the
 |------|-------------|---------|
 | `--interval` | Polling interval | `60s` |
 | `--exit` | Exit after any state change | `false` |
-| `--exit-on` | Exit after a specific event type | |
+| `--exit-on` | Exit after specific event types (comma-separated) | |
 
 ### Examples
 
@@ -66,8 +66,6 @@ Each event is printed as a single line of JSON to **stdout**:
   "details": {}
 }
 ```
-
-A startup message is printed to **stderr**.
 
 ### Event Types
 
