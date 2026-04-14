@@ -4,12 +4,14 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 
 ## Architecture
 
-- `main.go` — CLI entry point (cobra). Root command + `pr` subcommand.
+- `main.go` — CLI entry point (cobra). Root command + `pr` and `commit` subcommands.
+- `internal/checks/` — Shared `CheckRun` type, CI summary helpers, and StatusContext mappers used by both PR and commit.
 - `internal/pr/` — PR state snapshot types and GraphQL fetcher (via go-gh SDK).
-- `internal/events/` — Event types and `Diff(old, new)` state diffing logic. This is the core business logic.
+- `internal/commit/` — Commit CI state snapshot types and GraphQL fetcher.
+- `internal/events/` — Event types and diffing logic. `ci.go` has shared CI diff logic; `diff.go` adds PR-specific events (reviews, comments, merge conflicts); `commit_diff.go` handles commit initial state.
 - `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`).
 - `internal/output/` — JSON to stdout.
-- `plugin/` — Claude Code plugin: provides a skill for monitoring PRs.
+- `plugin/` — Claude Code plugin: provides skills for monitoring PRs and commits.
 
 ## Key design decisions
 
@@ -30,7 +32,7 @@ go build -o ./gh-watch . && gh watch pr
 go test ./...
 ```
 
-Tests live in `internal/events/diff_test.go` focused on the state diffing logic.
+Tests live in `internal/events/diff_test.go` and `internal/events/commit_diff_test.go` focused on the state diffing logic.
 
 ## Releasing
 

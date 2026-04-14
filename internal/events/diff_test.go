@@ -3,6 +3,7 @@ package events
 import (
 	"testing"
 
+	"github.com/justincampbell/gh-watch/internal/checks"
 	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
@@ -22,7 +23,7 @@ func TestDiff_NilOld_InitialStateWithChecks(t *testing.T) {
 		Number: 42,
 		Title:  "Add feature",
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
 			{Name: "build", Status: "QUEUED", Conclusion: ""},
@@ -100,14 +101,14 @@ func TestDiff_CIAllPassed(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
 		},
 	}
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 		},
 	}
@@ -125,7 +126,7 @@ func TestDiff_CIFailed_Immediate(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
 			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
 		},
@@ -133,7 +134,7 @@ func TestDiff_CIFailed_Immediate(t *testing.T) {
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
 		},
@@ -155,7 +156,7 @@ func TestDiff_CIFailed_AllCompleteWithPriorFailure(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
 		},
@@ -163,7 +164,7 @@ func TestDiff_CIFailed_AllCompleteWithPriorFailure(t *testing.T) {
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
 		},
@@ -183,7 +184,7 @@ func TestDiff_CIFailed_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
 		},
@@ -191,7 +192,7 @@ func TestDiff_CIFailed_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
 		},
@@ -276,7 +277,7 @@ func TestDiff_NoChangeNoEvents(t *testing.T) {
 		Number:    1,
 		Status:    "open",
 		Mergeable: "MERGEABLE",
-		CheckRuns: []pr.CheckRun{
+		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
 		},
 		Reviews: []pr.Review{

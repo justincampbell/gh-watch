@@ -20,6 +20,17 @@ gh watch <command> [flags]
 
 Watch a pull request for state changes. If no PR number is given, the PR for the current branch is detected automatically.
 
+#### `gh watch commit <sha-or-url> [flags]`
+
+Watch a commit for CI status changes. Exits automatically when all checks complete.
+
+Accepts a bare SHA (uses the current repo) or a full GitHub commit URL:
+
+```
+gh watch commit abc1234
+gh watch commit https://github.com/owner/repo/commit/abc1234
+```
+
 ### Flags
 
 | Flag | Description | Default |
@@ -52,6 +63,12 @@ Exit on any change:
 
 ```
 gh watch pr 42 --exit
+```
+
+Watch a commit's CI from another repo:
+
+```
+gh watch commit https://github.com/owner/repo/commit/abc1234
 ```
 
 ## Output Format

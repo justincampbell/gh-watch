@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justincampbell/gh-watch/internal/checks"
 	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
@@ -39,81 +40,8 @@ func Diff(old, new *pr.State) []Event {
 		return events
 	}
 
-	// CI: emit ci-failed immediately when any check fails
-	oldChecks := buildCheckMap(old.CheckRuns)
-	for _, check := range new.CheckRuns {
-		if check.Conclusion == "FAILURE" || check.Conclusion == "TIMED_OUT" || check.Conclusion == "CANCELLED" {
-			oldCheck, existed := oldChecks[check.Name]
-			if !existed || oldCheck.Conclusion != check.Conclusion {
-				events = append(events, Event{
-					Timestamp: now,
-					Event:     CIFailed,
-					Summary:   fmt.Sprintf("CI failed: %s", check.Name),
-					Details: map[string]interface{}{
-						"name": check.Name,
-						"url":  check.URL,
-					},
-				})
-				break
-			}
-		}
-	}
-
-	// CI: emit ci-passed or ci-failed when all checks complete
-	allCompleted := len(new.CheckRuns) > 0
-	anyFailed := false
-	var firstFailedName, firstFailedURL string
-	for _, check := range new.CheckRuns {
-		if check.Status != "COMPLETED" {
-			allCompleted = false
-		}
-		if check.Conclusion == "FAILURE" || check.Conclusion == "TIMED_OUT" || check.Conclusion == "CANCELLED" {
-			anyFailed = true
-			if firstFailedName == "" {
-				firstFailedName = check.Name
-				firstFailedURL = check.URL
-			}
-		}
-	}
-	if allCompleted && len(new.CheckRuns) > 0 {
-		oldAllCompleted := true
-		for _, c := range old.CheckRuns {
-			if c.Status != "COMPLETED" {
-				oldAllCompleted = false
-				break
-			}
-		}
-		if !oldAllCompleted {
-			if anyFailed {
-				// Only emit if we didn't already emit ci-failed for a newly-failed check above
-				alreadyEmitted := false
-				for _, e := range events {
-					if e.Event == CIFailed {
-						alreadyEmitted = true
-						break
-					}
-				}
-				if !alreadyEmitted {
-					events = append(events, Event{
-						Timestamp: now,
-						Event:     CIFailed,
-						Summary:   fmt.Sprintf("CI failed: %s", firstFailedName),
-						Details: map[string]interface{}{
-							"name": firstFailedName,
-							"url":  firstFailedURL,
-						},
-					})
-				}
-			} else {
-				events = append(events, Event{
-					Timestamp: now,
-					Event:     CIAllPassed,
-					Summary:   "All CI checks passed",
-					Details:   map[string]interface{}{},
-				})
-			}
-		}
-	}
+	// CI changes
+	events = append(events, diffCI(old.CheckRuns, new.CheckRuns, now)...)
 
 	// Review changes
 	if len(new.Reviews) > len(old.Reviews) {
@@ -166,27 +94,14 @@ func Diff(old, new *pr.State) []Event {
 func initialStateEvent(state *pr.State, now time.Time) Event {
 	var parts []string
 
-	// CI summary
-	completed, passed, failed, pending := 0, 0, 0, 0
-	for _, c := range state.CheckRuns {
-		if c.Status == "COMPLETED" {
-			completed++
-			if c.Conclusion == "FAILURE" || c.Conclusion == "TIMED_OUT" || c.Conclusion == "CANCELLED" {
-				failed++
-			} else {
-				passed++
-			}
+	s := checks.Summarize(state.CheckRuns)
+	if s.Total > 0 {
+		if s.Pending > 0 {
+			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d pending", s.Passed, s.Total, s.Pending))
+		} else if s.Failed > 0 {
+			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d failed", s.Passed, s.Total, s.Failed))
 		} else {
-			pending++
-		}
-	}
-	if len(state.CheckRuns) > 0 {
-		if pending > 0 {
-			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d pending", passed, len(state.CheckRuns), pending))
-		} else if failed > 0 {
-			parts = append(parts, fmt.Sprintf("CI: %d/%d passed, %d failed", passed, len(state.CheckRuns), failed))
-		} else {
-			parts = append(parts, fmt.Sprintf("CI: all %d checks passed", len(state.CheckRuns)))
+			parts = append(parts, fmt.Sprintf("CI: all %d checks passed", s.Total))
 		}
 	}
 
@@ -229,22 +144,14 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 			"title":     state.Title,
 			"status":    state.Status,
 			"mergeable": state.Mergeable,
-			"checks":    len(state.CheckRuns),
-			"passed":    passed,
-			"failed":    failed,
-			"pending":   pending,
+			"checks":    s.Total,
+			"passed":    s.Passed,
+			"failed":    s.Failed,
+			"pending":   s.Pending,
 			"reviews":   len(state.Reviews),
 			"comments":  len(state.Comments),
 		},
 	}
-}
-
-func buildCheckMap(checks []pr.CheckRun) map[string]pr.CheckRun {
-	m := make(map[string]pr.CheckRun, len(checks))
-	for _, c := range checks {
-		m[c.Name] = c
-	}
-	return m
 }
 
 func truncate(s string, n int) string {

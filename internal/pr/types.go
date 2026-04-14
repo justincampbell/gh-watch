@@ -1,6 +1,10 @@
 package pr
 
-import "time"
+import (
+	"time"
+
+	"github.com/justincampbell/gh-watch/internal/checks"
+)
 
 // State represents a snapshot of a PR's current state.
 type State struct {
@@ -9,16 +13,9 @@ type State struct {
 	Status    string // "open", "closed", "merged"
 	Mergeable string // "MERGEABLE", "CONFLICTING", "UNKNOWN"
 
-	CheckRuns []CheckRun
+	CheckRuns []checks.CheckRun
 	Reviews   []Review
 	Comments  []Comment
-}
-
-type CheckRun struct {
-	Name       string
-	Status     string // "QUEUED", "IN_PROGRESS", "COMPLETED"
-	Conclusion string // "SUCCESS", "FAILURE", "NEUTRAL", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", ""
-	URL        string
 }
 
 type Review struct {

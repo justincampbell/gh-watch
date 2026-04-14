@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/justincampbell/gh-watch/internal/checks"
 )
 
 // Fetcher retrieves PR state from GitHub.
@@ -147,17 +148,17 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 		contexts := pr.Commits.Nodes[0].Commit.StatusCheckRollup.Contexts.Nodes
 		for _, ctx := range contexts {
 			if ctx.TypeName == "CheckRun" {
-				state.CheckRuns = append(state.CheckRuns, CheckRun{
+				state.CheckRuns = append(state.CheckRuns, checks.CheckRun{
 					Name:       ctx.Name,
 					Status:     ctx.Status,
 					Conclusion: ctx.Conclusion,
 					URL:        ctx.DetailsURL,
 				})
 			} else if ctx.TypeName == "StatusContext" {
-				state.CheckRuns = append(state.CheckRuns, CheckRun{
+				state.CheckRuns = append(state.CheckRuns, checks.CheckRun{
 					Name:       ctx.Context,
-					Status:     statusContextStateToStatus(ctx.State),
-					Conclusion: statusContextStateToConclusion(ctx.State),
+					Status:     checks.StatusContextStateToStatus(ctx.State),
+					Conclusion: checks.StatusContextStateToConclusion(ctx.State),
 					URL:        ctx.TargetURL,
 				})
 			}
@@ -192,27 +193,5 @@ func stateToStatus(s string) string {
 		return "closed"
 	default:
 		return "open"
-	}
-}
-
-func statusContextStateToStatus(s string) string {
-	switch s {
-	case "PENDING", "EXPECTED":
-		return "IN_PROGRESS"
-	default:
-		return "COMPLETED"
-	}
-}
-
-func statusContextStateToConclusion(s string) string {
-	switch s {
-	case "SUCCESS":
-		return "SUCCESS"
-	case "FAILURE", "ERROR":
-		return "FAILURE"
-	case "PENDING", "EXPECTED":
-		return ""
-	default:
-		return s
 	}
 }

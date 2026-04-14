@@ -7,7 +7,7 @@
     {
       "name": "gh-watch",
       "source": "./",
-      "description": "Watch GitHub pull requests for CI status, reviews, comments, and merge conflicts."
+      "description": "Watch GitHub pull requests and commits for CI status, reviews, comments, and merge conflicts."
     }
   ]
 }
