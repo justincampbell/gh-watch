@@ -25,7 +25,6 @@ Watch a pull request for state changes. If no PR number is given, the PR for the
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--interval` | Polling interval | `60s` |
-| `--json` | JSON-only output (suppress human-friendly stderr) | `false` |
 | `--exit` | Exit after any state change | `false` |
 | `--exit-on` | Exit after a specific event type | |
 
@@ -55,12 +54,6 @@ Exit on any change:
 gh watch pr 42 --exit
 ```
 
-JSON-only output for machine consumption:
-
-```
-gh watch pr 42 --json
-```
-
 ## Output Format
 
 Each event is printed as a single line of JSON to **stdout**:
@@ -74,18 +67,12 @@ Each event is printed as a single line of JSON to **stdout**:
 }
 ```
 
-A human-friendly summary is printed to **stderr** (unless `--json` is used):
-
-```
-[10:30:00] All CI checks passed
-```
+A startup message is printed to **stderr**.
 
 ### Event Types
 
 | Event | Description |
 |-------|-------------|
-| `any` | Exit on any event (for `--exit-on`) |
-| `ci-status-changed` | A check run transitioned state |
 | `ci-passed` | All required checks are passing |
 | `ci-failed` | A required check has failed |
 | `review-submitted` | A review was submitted |
@@ -100,13 +87,13 @@ Build and install from local source:
 
 ```
 gh extension install .
-go build -o "$(gh extension list | grep watch | awk '{print $NF}')/gh-watch" .
+go build -o ./gh-watch .
 ```
 
 Run after making changes:
 
 ```
-go build -o "$(gh extension list | grep watch | awk '{print $NF}')/gh-watch" . && gh watch pr
+go build -o ./gh-watch . && gh watch pr
 ```
 
 ## Releasing

@@ -1,13 +1,13 @@
 {
-  "name": "github-watch",
+  "name": "gh-watch",
   "owner": {
     "name": "Justin Campbell"
   },
   "plugins": [
     {
-      "name": "github-watch",
+      "name": "gh-watch",
       "source": "./",
-      "description": "Watch GitHub pull requests for CI status, reviews, comments, and merge conflicts. Auto-watches after git push."
+      "description": "Watch GitHub pull requests for CI status, reviews, comments, and merge conflicts."
     }
   ]
 }

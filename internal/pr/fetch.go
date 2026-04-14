@@ -141,7 +141,6 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 		Title:     pr.Title,
 		Status:    stateToStatus(pr.State),
 		Mergeable: pr.Mergeable,
-		FetchedAt: time.Now(),
 	}
 
 	if len(pr.Commits.Nodes) > 0 {

@@ -96,7 +96,7 @@ func TestDiff_PRClosed(t *testing.T) {
 	}
 }
 
-func TestDiff_CIStatusChanged(t *testing.T) {
+func TestDiff_CIAllPassed(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
@@ -113,25 +113,15 @@ func TestDiff_CIStatusChanged(t *testing.T) {
 	}
 	events := Diff(old, new)
 
-	hasStatusChange := false
-	hasAllPassed := false
-	for _, e := range events {
-		if e.Event == CIStatusChanged {
-			hasStatusChange = true
-		}
-		if e.Event == CIAllPassed {
-			hasAllPassed = true
-		}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
 	}
-	if !hasStatusChange {
-		t.Error("expected CIStatusChanged event")
-	}
-	if !hasAllPassed {
-		t.Error("expected CIAllPassed event")
+	if events[0].Event != CIAllPassed {
+		t.Errorf("expected CIAllPassed, got %s", events[0].Event)
 	}
 }
 
-func TestDiff_CIFailed(t *testing.T) {
+func TestDiff_CIFailed_Immediate(t *testing.T) {
 	old := &pr.State{
 		Number: 1,
 		Status: "open",
@@ -144,23 +134,72 @@ func TestDiff_CIFailed(t *testing.T) {
 		Number: 1,
 		Status: "open",
 		CheckRuns: []pr.CheckRun{
-			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
 		},
 	}
 	events := Diff(old, new)
 
-	hasFailed := false
-	for _, e := range events {
-		if e.Event == CIFailed {
-			hasFailed = true
-			if e.Details["name"] != "lint" {
-				t.Errorf("expected failed check name 'lint', got %v", e.Details["name"])
-			}
-		}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event (immediate ci-failed), got %d", len(events))
 	}
-	if !hasFailed {
-		t.Error("expected CIFailed event")
+	if events[0].Event != CIFailed {
+		t.Errorf("expected CIFailed, got %s", events[0].Event)
+	}
+	if events[0].Details["name"] != "lint" {
+		t.Errorf("expected failed check name 'lint', got %v", events[0].Details["name"])
+	}
+}
+
+func TestDiff_CIFailed_AllCompleteWithPriorFailure(t *testing.T) {
+	old := &pr.State{
+		Number: 1,
+		Status: "open",
+		CheckRuns: []pr.CheckRun{
+			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		},
+	}
+	new := &pr.State{
+		Number: 1,
+		Status: "open",
+		CheckRuns: []pr.CheckRun{
+			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		},
+	}
+	events := Diff(old, new)
+
+	// Should emit ci-failed because all checks are now complete and some failed
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != CIFailed {
+		t.Errorf("expected CIFailed, got %s", events[0].Event)
+	}
+}
+
+func TestDiff_CIFailed_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
+	old := &pr.State{
+		Number: 1,
+		Status: "open",
+		CheckRuns: []pr.CheckRun{
+			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		},
+	}
+	new := &pr.State{
+		Number: 1,
+		Status: "open",
+		CheckRuns: []pr.CheckRun{
+			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		},
+	}
+	events := Diff(old, new)
+
+	if len(events) != 0 {
+		t.Errorf("expected no events when all checks were already complete, got %d", len(events))
 	}
 }
 

@@ -10,6 +10,6 @@ The `gh-watch` extension must be installed:
 gh extension install justincampbell/gh-watch
 ```
 
-## Hook
+## Usage
 
-After `git push`, automatically starts `gh watch pr` in the background if the branch has an open PR.
+Use the `/github-watch-pull-request` skill to monitor a PR after pushing code or when waiting for CI/reviews.

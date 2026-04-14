@@ -12,8 +12,6 @@ type State struct {
 	CheckRuns []CheckRun
 	Reviews   []Review
 	Comments  []Comment
-
-	FetchedAt time.Time
 }
 
 type CheckRun struct {

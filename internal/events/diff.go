@@ -39,42 +39,42 @@ func Diff(old, new *pr.State) []Event {
 		return events
 	}
 
-	// CI status changes
+	// CI: emit ci-failed immediately when any check fails
 	oldChecks := buildCheckMap(old.CheckRuns)
-	allCompleted := len(new.CheckRuns) > 0
-	anyFailed := false
-	var failedName, failedURL string
-
 	for _, check := range new.CheckRuns {
-		oldCheck, existed := oldChecks[check.Name]
-		if check.Status != "COMPLETED" {
-			allCompleted = false
-		}
-
-		if existed && (oldCheck.Status != check.Status || oldCheck.Conclusion != check.Conclusion) {
-			summary := fmt.Sprintf("CI: %s → %s", check.Name, formatCheckState(check))
-			events = append(events, Event{
-				Timestamp: now,
-				Event:     CIStatusChanged,
-				Summary:   summary,
-				Details: map[string]interface{}{
-					"name":       check.Name,
-					"status":     check.Status,
-					"conclusion": check.Conclusion,
-					"url":        check.URL,
-				},
-			})
-		}
-
 		if check.Conclusion == "FAILURE" || check.Conclusion == "TIMED_OUT" || check.Conclusion == "CANCELLED" {
-			anyFailed = true
-			if failedName == "" {
-				failedName = check.Name
-				failedURL = check.URL
+			oldCheck, existed := oldChecks[check.Name]
+			if !existed || oldCheck.Conclusion != check.Conclusion {
+				events = append(events, Event{
+					Timestamp: now,
+					Event:     CIFailed,
+					Summary:   fmt.Sprintf("CI failed: %s", check.Name),
+					Details: map[string]interface{}{
+						"name": check.Name,
+						"url":  check.URL,
+					},
+				})
+				break
 			}
 		}
 	}
 
+	// CI: emit ci-passed or ci-failed when all checks complete
+	allCompleted := len(new.CheckRuns) > 0
+	anyFailed := false
+	var firstFailedName, firstFailedURL string
+	for _, check := range new.CheckRuns {
+		if check.Status != "COMPLETED" {
+			allCompleted = false
+		}
+		if check.Conclusion == "FAILURE" || check.Conclusion == "TIMED_OUT" || check.Conclusion == "CANCELLED" {
+			anyFailed = true
+			if firstFailedName == "" {
+				firstFailedName = check.Name
+				firstFailedURL = check.URL
+			}
+		}
+	}
 	if allCompleted && len(new.CheckRuns) > 0 {
 		oldAllCompleted := true
 		for _, c := range old.CheckRuns {
@@ -85,15 +85,25 @@ func Diff(old, new *pr.State) []Event {
 		}
 		if !oldAllCompleted {
 			if anyFailed {
-				events = append(events, Event{
-					Timestamp: now,
-					Event:     CIFailed,
-					Summary:   fmt.Sprintf("CI failed: %s", failedName),
-					Details: map[string]interface{}{
-						"name": failedName,
-						"url":  failedURL,
-					},
-				})
+				// Only emit if we didn't already emit ci-failed for a newly-failed check above
+				alreadyEmitted := false
+				for _, e := range events {
+					if e.Event == CIFailed {
+						alreadyEmitted = true
+						break
+					}
+				}
+				if !alreadyEmitted {
+					events = append(events, Event{
+						Timestamp: now,
+						Event:     CIFailed,
+						Summary:   fmt.Sprintf("CI failed: %s", firstFailedName),
+						Details: map[string]interface{}{
+							"name": firstFailedName,
+							"url":  firstFailedURL,
+						},
+					})
+				}
 			} else {
 				events = append(events, Event{
 					Timestamp: now,
@@ -161,10 +171,10 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 	for _, c := range state.CheckRuns {
 		if c.Status == "COMPLETED" {
 			completed++
-			if c.Conclusion == "SUCCESS" || c.Conclusion == "NEUTRAL" {
-				passed++
-			} else {
+			if c.Conclusion == "FAILURE" || c.Conclusion == "TIMED_OUT" || c.Conclusion == "CANCELLED" {
 				failed++
+			} else {
+				passed++
 			}
 		} else {
 			pending++
@@ -235,13 +245,6 @@ func buildCheckMap(checks []pr.CheckRun) map[string]pr.CheckRun {
 		m[c.Name] = c
 	}
 	return m
-}
-
-func formatCheckState(c pr.CheckRun) string {
-	if c.Status == "COMPLETED" {
-		return strings.ToLower(c.Conclusion)
-	}
-	return strings.ToLower(c.Status)
 }
 
 func truncate(s string, n int) string {

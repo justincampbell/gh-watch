@@ -12,7 +12,6 @@ import (
 	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/justincampbell/gh-watch/internal/events"
-	"github.com/justincampbell/gh-watch/internal/hook"
 	"github.com/justincampbell/gh-watch/internal/output"
 	"github.com/justincampbell/gh-watch/internal/poller"
 	"github.com/justincampbell/gh-watch/internal/pr"
@@ -22,9 +21,8 @@ import (
 func main() {
 	var (
 		interval time.Duration
-		jsonOnly bool
 		exit     bool
-		exitOn   string
+		exitOn   []string
 	)
 
 	rootCmd := &cobra.Command{
@@ -33,9 +31,8 @@ func main() {
 	}
 
 	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
-	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output (suppress stderr human-friendly lines)")
 	rootCmd.PersistentFlags().BoolVar(&exit, "exit", false, "Exit after any state change (shorthand for --exit-on any)")
-	rootCmd.PersistentFlags().StringVar(&exitOn, "exit-on", "", `Exit after a specific event type (e.g. ci-passed, or "any")`)
+	rootCmd.PersistentFlags().StringSliceVar(&exitOn, "exit-on", nil, `Exit after specific event types (e.g. --exit-on ci-passed,ci-failed)`)
 	rootCmd.SilenceUsage = true
 
 	prCmd := &cobra.Command{
@@ -65,24 +62,17 @@ func main() {
 				}
 			}
 
-			writer := &output.Writer{
-				JSON:   os.Stdout,
-				Stderr: os.Stderr,
-				Quiet:  jsonOnly,
-			}
-
-			if !jsonOnly {
-				fmt.Fprintf(os.Stderr, "Watching PR #%d on %s/%s (polling every %s)\n", number, owner, repoName, interval)
-			}
+			writer := &output.Writer{JSON: os.Stdout}
 
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
 
-			var exitOnEvent events.EventType
-			if exit && exitOn == "" {
-				exitOnEvent = events.AnyEvent
-			} else if exitOn != "" {
-				exitOnEvent = events.EventType(exitOn)
+			var exitOnEvents []events.EventType
+			if exit && len(exitOn) == 0 {
+				exitOnEvents = []events.EventType{events.AnyEvent}
+			}
+			for _, e := range exitOn {
+				exitOnEvents = append(exitOnEvents, events.EventType(e))
 			}
 
 			fetcher := pr.NewFetcher()
@@ -101,28 +91,12 @@ func main() {
 					Duration: interval,
 				},
 				OnEvents: writer.WriteEvents,
-				ExitOn:   exitOnEvent,
+				ExitOn:   exitOnEvents,
 			})
 		},
 	}
 
-	hookCmd := &cobra.Command{
-		Use:    "hook",
-		Short:  "Hook subcommands for Claude Code integration",
-		Hidden: true,
-	}
-
-	hookPostToolUseCmd := &cobra.Command{
-		Use:   "post-tool-use",
-		Short: "Handle PostToolUse hook events",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return hook.PostToolUse(os.Stdin)
-		},
-	}
-
-	hookCmd.AddCommand(hookPostToolUseCmd)
-	rootCmd.AddCommand(prCmd, hookCmd)
+	rootCmd.AddCommand(prCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

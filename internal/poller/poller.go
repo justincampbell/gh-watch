@@ -28,7 +28,7 @@ type Config[S any] struct {
 	IsTerminal func(events.Event) bool
 	Strategy   Strategy
 	OnEvents   func([]events.Event)
-	ExitOn     events.EventType
+	ExitOn     []events.EventType
 }
 
 // Run polls for state changes until the context is cancelled or a terminal event occurs.
@@ -55,8 +55,10 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 			if cfg.IsTerminal != nil && cfg.IsTerminal(e) {
 				return nil
 			}
-			if cfg.ExitOn != "" && (cfg.ExitOn == events.AnyEvent || e.Event == cfg.ExitOn) {
-				return nil
+			for _, exitOn := range cfg.ExitOn {
+				if exitOn == events.AnyEvent || e.Event == exitOn {
+					return nil
+				}
 			}
 		}
 
