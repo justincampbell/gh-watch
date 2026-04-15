@@ -12,6 +12,7 @@ import (
 
 	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/justincampbell/gh-watch/internal/branch"
 	"github.com/justincampbell/gh-watch/internal/commit"
 	"github.com/justincampbell/gh-watch/internal/events"
 	"github.com/justincampbell/gh-watch/internal/output"
@@ -139,8 +140,47 @@ func main() {
 		},
 	}
 
+	branchCmd := &cobra.Command{
+		Use:   "branch <name>",
+		Short: "Watch a branch for new commits",
+		Long:  "Monitors a branch, polling for new commits pushed to it.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, err := repository.Current()
+			if err != nil {
+				return fmt.Errorf("detecting repository: %w", err)
+			}
+
+			owner := repo.Owner
+			repoName := repo.Name
+			branchName := args[0]
+
+			writer := &output.Writer{JSON: os.Stdout}
+
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
+
+			fetcher := branch.NewFetcher()
+
+			return poller.Run(ctx, poller.Config[branch.State]{
+				Fetch: func() (*branch.State, error) {
+					return fetcher.Fetch(owner, repoName, branchName)
+				},
+				Diff: func(old, new *branch.State) []events.Event {
+					return events.DiffBranch(old, new)
+				},
+				Strategy: &poller.FixedStrategy{
+					Duration: interval,
+				},
+				OnEvents: writer.WriteEvents,
+				ExitOn:   buildExitOnEvents(exit, exitOn),
+			})
+		},
+	}
+
 	rootCmd.AddCommand(prCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(branchCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

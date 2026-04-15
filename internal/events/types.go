@@ -15,6 +15,8 @@ const (
 	MergeConflictChanged EventType = "merge-conflict-changed"
 	PRMerged             EventType = "pr-merged"
 	PRClosed             EventType = "pr-closed"
+	NewCommit            EventType = "new-commit"
+	BranchDeleted        EventType = "branch-deleted"
 )
 
 // Event represents a detected state change.
