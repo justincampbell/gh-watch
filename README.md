@@ -8,6 +8,31 @@ A [gh](https://cli.github.com/) CLI extension that watches GitHub resources for 
 gh extension install justincampbell/gh-watch
 ```
 
+## Using with Claude Code
+
+This repo ships a [Claude Code plugin](https://docs.claude.com/en/docs/claude-code/plugins) with skills that let Claude watch PRs, commits, and branches on your behalf.
+
+### Install
+
+Add the marketplace, then install the plugin:
+
+```
+/plugin marketplace add justincampbell/gh-watch
+/plugin install gh-watch@gh-watch
+```
+
+The `gh-watch` CLI extension must also be installed (see [Installation](#installation) above) — the skills shell out to `gh watch`.
+
+### Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `/watch-pr` | Wait for a PR's CI, reviews, comments, or merge state to change |
+| `/watch-commit` | Wait for CI checks to finish on a specific SHA |
+| `/watch-branch` | Wait for new commits to land on a branch (e.g. `main` merges) |
+
+Claude will invoke the right skill automatically when you ask things like *"watch PR 42 and let me know when CI passes"* or *"wait for the build on this commit"*. You can also invoke a skill explicitly by typing its slash command.
+
 ## Usage
 
 ```
