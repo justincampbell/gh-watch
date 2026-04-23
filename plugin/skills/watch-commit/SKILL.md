@@ -58,13 +58,28 @@ gh watch commit $ARGUMENTS --exit-on ci-passed
 
 | Event | Description |
 |-------|-------------|
+| `initial-state` | Snapshot of commit CI state at the moment watching started (always emitted first) |
 | `ci-passed` | All CI checks passed (terminal — always exits) |
 | `ci-failed` | CI failed (at least one check failed) (terminal — always exits) |
 
 ## Output format
 
-One JSON object per line on stdout:
+One JSON object per line on stdout. The **first line is always `initial-state`** — a snapshot of the commit's CI at the moment watching began:
 
 ```json
-{"timestamp":"2026-04-13T10:30:00Z","event":"ci-passed","summary":"All CI checks passed","details":{}}
+{"timestamp":"...","event":"initial-state","summary":"Commit abc1234: Message — CI: 3/5 passed, 2 pending","details":{"sha":"abc1234...","checks":5,"passed":3,"failed":0,"pending":2}}
 ```
+
+Subsequent lines are change events:
+
+```json
+{"timestamp":"...","event":"ci-passed","summary":"All CI checks passed","details":{}}
+```
+
+## Interpreting the output
+
+**Always read and report the `initial-state` first.** Don't just say "watching in background" — tell the user how many checks passed/pending/failed.
+
+**Use `initial-state` to decide next steps:**
+- If CI already passed → no need to wait; act on the result immediately
+- If CI already failed → investigate the failure instead of waiting

@@ -50,12 +50,23 @@ gh watch branch $ARGUMENTS --exit
 
 | Event | Description |
 |-------|-------------|
+| `initial-state` | Snapshot of the branch tip at the moment watching started (always emitted first) |
 | `new-commit` | A new commit was pushed to the branch |
 
 ## Output format
 
-One JSON object per line on stdout:
+One JSON object per line on stdout. The **first line is always `initial-state`** — a snapshot of the branch at the moment watching began:
 
 ```json
-{"timestamp":"2026-04-15T10:30:00Z","event":"new-commit","summary":"New commit on main: abc1234 Add feature","details":{"branch":"main","sha":"abc1234...","previous_sha":"def5678...","message_headline":"Add feature","author":"octocat"}}
+{"timestamp":"...","event":"initial-state","summary":"Branch main at abc1234: Latest commit message","details":{"branch":"main","sha":"abc1234...","message_headline":"Latest commit message","author":"octocat"}}
 ```
+
+Subsequent lines are change events:
+
+```json
+{"timestamp":"...","event":"new-commit","summary":"New commit on main: def5678 Add feature","details":{"branch":"main","sha":"def5678...","previous_sha":"abc1234...","message_headline":"Add feature","author":"octocat"}}
+```
+
+## Interpreting the output
+
+**Always read and report the `initial-state` first.** Tell the user the current branch tip — the SHA, commit message, and author. Don't just say "watching in background."

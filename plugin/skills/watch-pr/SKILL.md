@@ -58,6 +58,7 @@ If no PR number is provided, the PR for the current branch is detected automatic
 
 | Event | Description |
 |-------|-------------|
+| `initial-state` | Snapshot of PR state at the moment watching started (always emitted first) |
 | `ci-passed` | All CI checks passed |
 | `ci-failed` | CI failed (at least one check failed) |
 | `review-submitted` | A review was submitted |
@@ -68,8 +69,26 @@ If no PR number is provided, the PR for the current branch is detected automatic
 
 ## Output format
 
-One JSON object per line on stdout:
+One JSON object per line on stdout. The **first line is always `initial-state`** — a snapshot of the PR at the moment watching began:
 
 ```json
-{"timestamp":"2026-04-13T10:30:00Z","event":"ci-passed","summary":"All CI checks passed","details":{}}
+{"timestamp":"...","event":"initial-state","summary":"PR #123: Title — CI: 5/8 passed, 3 pending, 1 reviews","details":{"number":123,"title":"...","status":"open","mergeable":"MERGEABLE","checks":8,"passed":5,"failed":0,"pending":3,"reviews":1,"comments":2}}
 ```
+
+Subsequent lines are change events:
+
+```json
+{"timestamp":"...","event":"ci-passed","summary":"All CI checks passed","details":{}}
+```
+
+## Interpreting the output
+
+**Always read and report the `initial-state` first.** It tells you the current PR state — don't just say "watching in background." Tell the user what you see: how many checks passed/pending/failed, review status, mergeable state.
+
+**Use `initial-state` to decide next steps:**
+- If CI already passed and reviews are approved → you may not need to wait; check if the PR can be merged or marked ready
+- If CI already failed → investigate immediately instead of waiting
+- If there are merge conflicts → flag them before waiting for CI
+- If reviews have changes requested → address those before watching CI
+
+**When the watcher exits**, the output file contains both the initial-state and the exit event. Read the exit event to determine what happened, but cross-reference with initial-state for full context (e.g., "CI failed" + initial-state showing 28/29 passed tells you only 1 check broke).

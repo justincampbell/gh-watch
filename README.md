@@ -111,8 +111,11 @@ Each event is printed as a single line of JSON to **stdout**:
 
 ### Event Types
 
+The first event emitted is always `initial-state` — a snapshot of the resource at the moment watching began. Subsequent events are state changes.
+
 | Event | Description |
 |-------|-------------|
+| `initial-state` | Snapshot of current state (always first, never triggers `--exit` or `--exit-on`) |
 | `ci-passed` | All required checks are passing |
 | `ci-failed` | A required check has failed |
 | `review-submitted` | A review was submitted |
