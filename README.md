@@ -124,6 +124,10 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 | `pr-merged` | The PR was merged (terminal) |
 | `pr-closed` | The PR was closed (terminal) |
 
+## Errors
+
+Transient GitHub failures (HTTP 5xx, 429, network timeouts) are retried automatically with exponential backoff, up to a 5-minute budget per poll. Retry attempts are logged to **stderr** so the JSON event stream on stdout stays clean. Non-transient errors (4xx, auth failures) exit immediately.
+
 ## Development
 
 Build and install from local source:

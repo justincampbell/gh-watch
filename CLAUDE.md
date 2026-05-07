@@ -9,7 +9,8 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 - `internal/pr/` — PR state snapshot types and GraphQL fetcher (via go-gh SDK).
 - `internal/commit/` — Commit CI state snapshot types and GraphQL fetcher.
 - `internal/events/` — Event types and diffing logic. `ci.go` has shared CI diff logic; `diff.go` adds PR-specific events (reviews, comments, merge conflicts); `commit_diff.go` handles commit initial state.
-- `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`).
+- `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`). Wraps `Fetch` in `cenkalti/backoff/v5` to retry transient errors (default 5min budget per poll).
+- `internal/retry/` — Classifies API errors as transient (`IsTransient`): GitHub 5xx/429, network errors, request timeouts.
 - `internal/output/` — JSON to stdout.
 - `plugin/` — Claude Code plugin: provides skills for monitoring PRs and commits.
 
@@ -18,7 +19,7 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 - Named `gh-watch` (not `gh-watch-pr`) to support future subcommands like `gh watch commit`, `gh watch branch`.
 - Poller uses generics so it's reusable for future watch targets beyond PRs.
 - Only aggregate CI events are emitted (`ci-passed`, `ci-failed`) — individual check transitions are noise.
-- Dependencies: only `go-gh/v2` (GitHub API/auth) and `cobra` (CLI). Auth is inherited from `gh` automatically.
+- Dependencies: `go-gh/v2` (GitHub API/auth), `cobra` (CLI), `cenkalti/backoff/v5` (retry). Auth is inherited from `gh` automatically.
 
 ## Development
 
@@ -32,7 +33,7 @@ go build -o ./gh-watch . && gh watch pr
 go test ./...
 ```
 
-Tests live in `internal/events/diff_test.go` and `internal/events/commit_diff_test.go` focused on the state diffing logic.
+Tests live in `internal/events/` (diffing logic), `internal/poller/` (retry integration), and `internal/retry/` (transient-error classifier).
 
 ## Releasing
 

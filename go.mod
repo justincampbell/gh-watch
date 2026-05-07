@@ -3,6 +3,7 @@ module github.com/justincampbell/gh-watch
 go 1.25.3
 
 require (
+	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/spf13/cobra v1.10.2
 )
