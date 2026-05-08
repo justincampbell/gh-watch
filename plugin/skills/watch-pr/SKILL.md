@@ -6,7 +6,7 @@ argument-hint: "[PR number]"
 
 # Watch a Pull Request
 
-Monitor a pull request for state changes using the `gh watch` CLI extension. Run it as a background process — it polls GitHub and emits one JSON event per line to stdout.
+Monitor a pull request for state changes using the `gh watch` CLI extension. It polls GitHub and emits one JSON event per line to stdout, which makes it a natural fit for the **Monitor tool** — each event arrives in the conversation as a notification.
 
 ## Prerequisites
 
@@ -24,27 +24,26 @@ gh extension install justincampbell/gh-watch
 
 ## Usage
 
-Run as a **background task** (Bash with `run_in_background: true`). Always use `--exit` or `--exit-on` so the process terminates.
+Run with the **Monitor tool** (not `Bash` with `run_in_background`). Each stdout line — starting with `initial-state` — is delivered as a notification, so you react to events as they land instead of polling an output file.
 
-**Wait for CI to finish (pass or fail):**
+**Wait for CI to finish, then exit** — use a bounded `timeout_ms` and let `--exit-on` end the watch:
 
-```
-gh watch pr $ARGUMENTS --exit-on ci-passed,ci-failed
-```
+- `command`: `gh watch pr $ARGUMENTS --exit-on ci-passed,ci-failed,pr-merged,pr-closed`
+- `description`: `PR $ARGUMENTS CI status`
+- `persistent`: `false`
+- `timeout_ms`: `1800000` (30 min — raise for slow CI)
 
 **Wait for a code review:**
 
-```
-gh watch pr $ARGUMENTS --exit-on review-submitted
-```
+- `command`: `gh watch pr $ARGUMENTS --exit-on review-submitted`
 
-**Exit on any meaningful change:**
+**Watch the PR for the rest of the session** (CI + reviews + comments + merge state):
 
-```
-gh watch pr $ARGUMENTS --exit
-```
+- `command`: `gh watch pr $ARGUMENTS`
+- `description`: `PR $ARGUMENTS state changes`
+- `persistent`: `true` (no timeout — stop with `TaskStop` or end of session)
 
-If no PR number is provided, the PR for the current branch is detected automatically.
+If no PR number is provided, the PR for the current branch is detected automatically. To watch a PR in another repo, prefix the command with `GH_REPO=owner/repo` (the `pr` subcommand takes a number, not a URL).
 
 ## Flags
 
@@ -83,12 +82,12 @@ Subsequent lines are change events:
 
 ## Interpreting the output
 
-**Always read and report the `initial-state` first.** It tells you the current PR state — don't just say "watching in background." Tell the user what you see: how many checks passed/pending/failed, review status, mergeable state.
+**The first notification is always `initial-state`.** Report it to the user immediately — don't just say "watching in background." Tell them what you see: how many checks passed/pending/failed, review status, mergeable state.
 
 **Use `initial-state` to decide next steps:**
 - If CI already passed and reviews are approved → you may not need to wait; check if the PR can be merged or marked ready
-- If CI already failed → investigate immediately instead of waiting
+- If CI already failed → investigate immediately instead of waiting (consider stopping the monitor with `TaskStop`)
 - If there are merge conflicts → flag them before waiting for CI
 - If reviews have changes requested → address those before watching CI
 
-**When the watcher exits**, the output file contains both the initial-state and the exit event. Read the exit event to determine what happened, but cross-reference with initial-state for full context (e.g., "CI failed" + initial-state showing 28/29 passed tells you only 1 check broke).
+**Subsequent notifications are state changes.** Each one is the full JSON event — react in context (e.g., "CI failed" combined with initial-state showing 28/29 passed tells you only 1 check broke).

@@ -6,7 +6,7 @@ argument-hint: "<sha-or-url>"
 
 # Watch a Commit
 
-Monitor a commit's CI checks for state changes using the `gh watch` CLI extension. Run it as a background process — it polls GitHub and emits one JSON event per line to stdout. Exits automatically when all checks complete.
+Monitor a commit's CI checks for state changes using the `gh watch` CLI extension. It polls GitHub and emits one JSON event per line to stdout, which makes it a natural fit for the **Monitor tool** — each event arrives in the conversation as a notification. Exits automatically when all checks complete.
 
 ## Prerequisites
 
@@ -24,27 +24,22 @@ gh extension install justincampbell/gh-watch
 
 ## Usage
 
-Run as a **background task** (Bash with `run_in_background: true`). The command exits automatically when CI finishes (all checks passed or any failed).
+Run with the **Monitor tool** (not `Bash` with `run_in_background`). The first notification is the `initial-state` snapshot; the next is the terminal `ci-passed` or `ci-failed`, after which gh-watch exits.
 
 **Watch a commit by SHA (current repo):**
 
-```
-gh watch commit $ARGUMENTS
-```
+- `command`: `gh watch commit $ARGUMENTS`
+- `description`: `Commit $ARGUMENTS CI status`
+- `persistent`: `false`
+- `timeout_ms`: `1800000` (30 min — raise for slow CI)
 
 **Watch a commit by GitHub URL:**
 
-```
-gh watch commit https://github.com/owner/repo/commit/abc1234
-```
+- `command`: `gh watch commit https://github.com/owner/repo/commit/abc1234`
 
-You can also use `--exit-on` to exit on a specific event:
+**Exit only if CI passes** (use `--exit-on` to ignore failures):
 
-**Exit only if CI passes:**
-
-```
-gh watch commit $ARGUMENTS --exit-on ci-passed
-```
+- `command`: `gh watch commit $ARGUMENTS --exit-on ci-passed`
 
 ## Flags
 
@@ -78,8 +73,8 @@ Subsequent lines are change events:
 
 ## Interpreting the output
 
-**Always read and report the `initial-state` first.** Don't just say "watching in background" — tell the user how many checks passed/pending/failed.
+**The first notification is always `initial-state`.** Report it to the user immediately — don't just say "watching in background." Tell them how many checks passed/pending/failed.
 
 **Use `initial-state` to decide next steps:**
-- If CI already passed → no need to wait; act on the result immediately
-- If CI already failed → investigate the failure instead of waiting
+- If CI already passed → no need to wait; stop the monitor with `TaskStop` and act on the result
+- If CI already failed → investigate the failure; stop the monitor with `TaskStop`

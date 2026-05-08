@@ -6,7 +6,7 @@ argument-hint: "<branch-name>"
 
 # Watch a Branch
 
-Monitor a branch for new commits using the `gh watch` CLI extension. Run it as a background process — it polls GitHub and emits one JSON event per line to stdout when the branch tip changes.
+Monitor a branch for new commits using the `gh watch` CLI extension. It polls GitHub and emits one JSON event per line to stdout when the branch tip changes, which makes it a natural fit for the **Monitor tool** — each event arrives in the conversation as a notification.
 
 ## Prerequisites
 
@@ -24,19 +24,20 @@ gh extension install justincampbell/gh-watch
 
 ## Usage
 
-Run as a **background task** (Bash with `run_in_background: true`). Use `--exit` or `--exit-on` to control when the process terminates.
+Run with the **Monitor tool** (not `Bash` with `run_in_background`). The first notification is the `initial-state` snapshot; subsequent notifications are `new-commit` events as they land.
 
-**Wait for the next commit on main:**
+**Wait for the next commit on main, then exit:**
 
-```
-gh watch branch $ARGUMENTS --exit-on new-commit
-```
+- `command`: `gh watch branch $ARGUMENTS --exit-on new-commit`
+- `description`: `New commits on $ARGUMENTS`
+- `persistent`: `false`
+- `timeout_ms`: `3600000` (1 hour — raise/lower based on how long you're willing to wait)
 
-**Exit on any change:**
+**Watch the branch for the rest of the session** (every new commit reported as it lands):
 
-```
-gh watch branch $ARGUMENTS --exit
-```
+- `command`: `gh watch branch $ARGUMENTS`
+- `description`: `Commits on $ARGUMENTS`
+- `persistent`: `true` (no timeout — stop with `TaskStop` or end of session)
 
 ## Flags
 
@@ -69,4 +70,6 @@ Subsequent lines are change events:
 
 ## Interpreting the output
 
-**Always read and report the `initial-state` first.** Tell the user the current branch tip — the SHA, commit message, and author. Don't just say "watching in background."
+**The first notification is always `initial-state`.** Report it to the user immediately — tell them the current branch tip (SHA, commit message, author). Don't just say "watching in background."
+
+**Subsequent `new-commit` notifications** are full JSON events with the new SHA, message, author, and previous SHA — surface each one as it lands.
