@@ -1,6 +1,7 @@
 package events
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/justincampbell/gh-watch/internal/checks"
@@ -269,6 +270,82 @@ func TestDiff_MergeConflictIgnoredWhenUnknown(t *testing.T) {
 	events := Diff(old, new)
 	if len(events) != 0 {
 		t.Errorf("expected no events when transitioning from UNKNOWN, got %d", len(events))
+	}
+}
+
+func TestDiff_MergeQueueEntered(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", InMergeQueue: false}
+	new := &pr.State{Number: 1, Status: "open", InMergeQueue: true, MergeQueueState: "QUEUED", MergeQueuePosition: 3}
+	events := Diff(old, new)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != MergeQueueEntered {
+		t.Errorf("expected MergeQueueEntered, got %s", events[0].Event)
+	}
+	if events[0].Details["position"] != 3 {
+		t.Errorf("expected position 3, got %v", events[0].Details["position"])
+	}
+}
+
+func TestDiff_MergeQueueStatusChanged(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", InMergeQueue: true, MergeQueueState: "AWAITING_CHECKS", MergeQueuePosition: 1}
+	new := &pr.State{Number: 1, Status: "open", InMergeQueue: true, MergeQueueState: "UNMERGEABLE", MergeQueuePosition: 1}
+	events := Diff(old, new)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != MergeQueueStatusChanged {
+		t.Errorf("expected MergeQueueStatusChanged, got %s", events[0].Event)
+	}
+	if events[0].Details["new"] != "UNMERGEABLE" {
+		t.Errorf("expected new UNMERGEABLE, got %v", events[0].Details["new"])
+	}
+}
+
+func TestDiff_MergeQueueRemoved(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", InMergeQueue: true, MergeQueueState: "UNMERGEABLE"}
+	new := &pr.State{Number: 1, Status: "open", InMergeQueue: false}
+	events := Diff(old, new)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != MergeQueueRemoved {
+		t.Errorf("expected MergeQueueRemoved, got %s", events[0].Event)
+	}
+	if events[0].Details["old_state"] != "UNMERGEABLE" {
+		t.Errorf("expected old_state UNMERGEABLE, got %v", events[0].Details["old_state"])
+	}
+}
+
+func TestDiff_MergeQueueRemovedNotEmittedOnMerge(t *testing.T) {
+	// A PR that leaves the queue by merging must report pr-merged only, never merge-queue-removed.
+	old := &pr.State{Number: 1, Status: "open", InMergeQueue: true, MergeQueueState: "MERGEABLE"}
+	new := &pr.State{Number: 1, Status: "merged", InMergeQueue: false}
+	events := Diff(old, new)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != PRMerged {
+		t.Errorf("expected PRMerged, got %s", events[0].Event)
+	}
+}
+
+func TestDiff_NilOld_InMergeQueue(t *testing.T) {
+	state := &pr.State{Number: 7, Title: "Queued PR", Status: "open", InMergeQueue: true, MergeQueueState: "QUEUED", MergeQueuePosition: 2}
+	events := Diff(nil, state)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	e := events[0]
+	if e.Event != InitialState {
+		t.Errorf("expected InitialState, got %s", e.Event)
+	}
+	if e.Details["in_merge_queue"] != true {
+		t.Errorf("expected in_merge_queue true, got %v", e.Details["in_merge_queue"])
+	}
+	if !strings.Contains(e.Summary, "in merge queue (position 2)") {
+		t.Errorf("expected summary to mention queue position, got %q", e.Summary)
 	}
 }
 

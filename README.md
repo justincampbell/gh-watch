@@ -121,6 +121,9 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
 | `merge-conflict-changed` | The PR's mergeable state changed |
+| `merge-queue-entered` | The PR was added to the merge queue |
+| `merge-queue-status-changed` | The PR's merge queue entry changed state (e.g. `AWAITING_CHECKS` → `UNMERGEABLE`) |
+| `merge-queue-removed` | The PR left the merge queue without merging (e.g. kicked out on failure) |
 | `pr-merged` | The PR was merged (terminal) |
 | `pr-closed` | The PR was closed (terminal) |
 

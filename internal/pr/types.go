@@ -13,6 +13,10 @@ type State struct {
 	Status    string // "open", "closed", "merged"
 	Mergeable string // "MERGEABLE", "CONFLICTING", "UNKNOWN"
 
+	InMergeQueue       bool   // true while the PR has a merge queue entry
+	MergeQueueState    string // entry state: QUEUED, AWAITING_CHECKS, MERGEABLE, UNMERGEABLE, LOCKED; "" when not queued
+	MergeQueuePosition int    // position in the queue; 0 when not queued
+
 	CheckRuns []checks.CheckRun
 	Reviews   []Review
 	Comments  []Comment

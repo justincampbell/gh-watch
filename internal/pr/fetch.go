@@ -23,11 +23,16 @@ func NewFetcher() Fetcher {
 type graphQLResponse struct {
 	Repository struct {
 		PullRequest struct {
-			Number    int
-			Title     string
-			State     string
-			Mergeable string
-			Commits   struct {
+			Number          int
+			Title           string
+			State           string
+			Mergeable       string
+			IsInMergeQueue  bool
+			MergeQueueEntry *struct {
+				State    string
+				Position int
+			}
+			Commits struct {
 				Nodes []struct {
 					Commit struct {
 						StatusCheckRollup struct {
@@ -81,6 +86,11 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 				title
 				state
 				mergeable
+				isInMergeQueue
+				mergeQueueEntry {
+					state
+					position
+				}
 				commits(last: 1) {
 					nodes {
 						commit {
@@ -138,10 +148,15 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 	pr := resp.Repository.PullRequest
 
 	state := &State{
-		Number:    pr.Number,
-		Title:     pr.Title,
-		Status:    stateToStatus(pr.State),
-		Mergeable: pr.Mergeable,
+		Number:       pr.Number,
+		Title:        pr.Title,
+		Status:       stateToStatus(pr.State),
+		Mergeable:    pr.Mergeable,
+		InMergeQueue: pr.IsInMergeQueue || pr.MergeQueueEntry != nil,
+	}
+	if pr.MergeQueueEntry != nil {
+		state.MergeQueueState = pr.MergeQueueEntry.State
+		state.MergeQueuePosition = pr.MergeQueueEntry.Position
 	}
 
 	if len(pr.Commits.Nodes) > 0 {

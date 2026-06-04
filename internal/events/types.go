@@ -6,17 +6,20 @@ import "time"
 type EventType string
 
 const (
-	AnyEvent             EventType = "any"
-	InitialState         EventType = "initial-state"
-	CIAllPassed          EventType = "ci-passed"
-	CIFailed             EventType = "ci-failed"
-	ReviewSubmitted      EventType = "review-submitted"
-	CommentAdded         EventType = "comment-added"
-	MergeConflictChanged EventType = "merge-conflict-changed"
-	PRMerged             EventType = "pr-merged"
-	PRClosed             EventType = "pr-closed"
-	NewCommit            EventType = "new-commit"
-	BranchDeleted        EventType = "branch-deleted"
+	AnyEvent                EventType = "any"
+	InitialState            EventType = "initial-state"
+	CIAllPassed             EventType = "ci-passed"
+	CIFailed                EventType = "ci-failed"
+	ReviewSubmitted         EventType = "review-submitted"
+	CommentAdded            EventType = "comment-added"
+	MergeConflictChanged    EventType = "merge-conflict-changed"
+	MergeQueueEntered       EventType = "merge-queue-entered"
+	MergeQueueStatusChanged EventType = "merge-queue-status-changed"
+	MergeQueueRemoved       EventType = "merge-queue-removed"
+	PRMerged                EventType = "pr-merged"
+	PRClosed                EventType = "pr-closed"
+	NewCommit               EventType = "new-commit"
+	BranchDeleted           EventType = "branch-deleted"
 )
 
 // Event represents a detected state change.

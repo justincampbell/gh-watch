@@ -37,6 +37,10 @@ Run with the **Monitor tool** (not `Bash` with `run_in_background`). Each stdout
 
 - `command`: `gh watch pr $ARGUMENTS --exit-on review-submitted`
 
+**Wait until a queued PR resolves** (merges or gets kicked out of the merge queue):
+
+- `command`: `gh watch pr $ARGUMENTS --exit-on pr-merged,merge-queue-removed`
+
 **Watch the PR for the rest of the session** (CI + reviews + comments + merge state):
 
 - `command`: `gh watch pr $ARGUMENTS`
@@ -63,6 +67,9 @@ If no PR number is provided, the PR for the current branch is detected automatic
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
 | `merge-conflict-changed` | Mergeable state changed |
+| `merge-queue-entered` | PR was added to the merge queue |
+| `merge-queue-status-changed` | Merge queue entry changed state (e.g. `AWAITING_CHECKS` → `UNMERGEABLE`) |
+| `merge-queue-removed` | PR left the merge queue without merging (e.g. kicked out on failure) |
 | `pr-merged` | PR was merged (terminal — always exits) |
 | `pr-closed` | PR was closed (terminal — always exits) |
 

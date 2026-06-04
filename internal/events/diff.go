@@ -88,7 +88,49 @@ func Diff(old, new *pr.State) []Event {
 		})
 	}
 
+	// Merge queue changes. Reached only when the PR is still open — the merged/closed
+	// early returns above ensure a PR that leaves the queue by merging reports pr-merged,
+	// not merge-queue-removed.
+	events = append(events, diffMergeQueue(old, new, now)...)
+
 	return events
+}
+
+// diffMergeQueue detects merge queue lifecycle transitions between two PR states.
+func diffMergeQueue(old, new *pr.State, now time.Time) []Event {
+	switch {
+	case !old.InMergeQueue && new.InMergeQueue:
+		return []Event{{
+			Timestamp: now,
+			Event:     MergeQueueEntered,
+			Summary:   fmt.Sprintf("Entered merge queue (position %d)", new.MergeQueuePosition),
+			Details: map[string]interface{}{
+				"state":    new.MergeQueueState,
+				"position": new.MergeQueuePosition,
+			},
+		}}
+	case old.InMergeQueue && !new.InMergeQueue:
+		return []Event{{
+			Timestamp: now,
+			Event:     MergeQueueRemoved,
+			Summary:   fmt.Sprintf("Removed from merge queue (was %s)", old.MergeQueueState),
+			Details: map[string]interface{}{
+				"old_state": old.MergeQueueState,
+			},
+		}}
+	case old.InMergeQueue && new.InMergeQueue && old.MergeQueueState != new.MergeQueueState:
+		return []Event{{
+			Timestamp: now,
+			Event:     MergeQueueStatusChanged,
+			Summary:   fmt.Sprintf("Merge queue status: %s → %s", old.MergeQueueState, new.MergeQueueState),
+			Details: map[string]interface{}{
+				"old":      old.MergeQueueState,
+				"new":      new.MergeQueueState,
+				"position": new.MergeQueuePosition,
+			},
+		}}
+	}
+	return nil
 }
 
 func initialStateEvent(state *pr.State, now time.Time) Event {
@@ -130,6 +172,11 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 		parts = append(parts, "has merge conflicts")
 	}
 
+	// Merge queue
+	if state.InMergeQueue {
+		parts = append(parts, fmt.Sprintf("in merge queue (position %d)", state.MergeQueuePosition))
+	}
+
 	summary := fmt.Sprintf("PR #%d: %s", state.Number, state.Title)
 	if len(parts) > 0 {
 		summary += " — " + strings.Join(parts, ", ")
@@ -140,16 +187,18 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 		Event:     InitialState,
 		Summary:   summary,
 		Details: map[string]interface{}{
-			"number":    state.Number,
-			"title":     state.Title,
-			"status":    state.Status,
-			"mergeable": state.Mergeable,
-			"checks":    s.Total,
-			"passed":    s.Passed,
-			"failed":    s.Failed,
-			"pending":   s.Pending,
-			"reviews":   len(state.Reviews),
-			"comments":  len(state.Comments),
+			"number":            state.Number,
+			"title":             state.Title,
+			"status":            state.Status,
+			"mergeable":         state.Mergeable,
+			"in_merge_queue":    state.InMergeQueue,
+			"merge_queue_state": state.MergeQueueState,
+			"checks":            s.Total,
+			"passed":            s.Passed,
+			"failed":            s.Failed,
+			"pending":           s.Pending,
+			"reviews":           len(state.Reviews),
+			"comments":          len(state.Comments),
 		},
 	}
 }
