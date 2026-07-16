@@ -10,7 +10,7 @@ gh extension install justincampbell/gh-watch
 
 ## Using with Claude Code
 
-This repo ships a [Claude Code plugin](https://docs.claude.com/en/docs/claude-code/plugins) with skills that let Claude watch PRs, commits, and branches on your behalf.
+This repo ships a [Claude Code plugin](https://docs.claude.com/en/docs/claude-code/plugins) with skills that let Claude watch PRs, commits, branches, and tags on your behalf.
 
 ### Install
 
@@ -30,6 +30,7 @@ The `gh-watch` CLI extension must also be installed (see [Installation](#install
 | `/watch-pr` | Wait for a PR's CI, reviews, comments, or merge state to change |
 | `/watch-commit` | Wait for CI checks to finish on a specific SHA |
 | `/watch-branch` | Wait for new commits to land on a branch (e.g. `main` merges) |
+| `/watch-tag` | Wait for a new tag, or for a tag that includes a specific commit |
 
 Claude will invoke the right skill automatically when you ask things like *"watch PR 42 and let me know when CI passes"* or *"wait for the build on this commit"*. You can also invoke a skill explicitly by typing its slash command.
 
@@ -55,6 +56,24 @@ Accepts a bare SHA (uses the current repo) or a full GitHub commit URL:
 gh watch commit abc1234
 gh watch commit https://github.com/owner/repo/commit/abc1234
 ```
+
+#### `gh watch branch <name> [flags]`
+
+Watch a branch for new commits pushed to it.
+
+#### `gh watch tag [flags]`
+
+Watch a repository's tags for newly created tags. Use `--match` to filter tag names by glob, and `--contains` to report only tags whose commit includes a given commit. In `--contains` mode, if a matching tag already exists when watching begins, it is reported immediately (with `"preexisting": true`) so `--exit` / `--exit-on tag-created` can fire.
+
+```
+gh watch tag --match 'v*'
+gh watch tag --match 'v*' --contains abc1234
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--match` | Glob to filter tag names (`*`, `?`, `[…]`) | all tags |
+| `--contains` | Only report tags whose commit contains this commit SHA | |
 
 ### Flags
 
@@ -96,6 +115,12 @@ Watch a commit's CI from another repo:
 gh watch commit https://github.com/owner/repo/commit/abc1234
 ```
 
+Wait for a release tag that includes a merged commit, then exit:
+
+```
+gh watch tag --match 'v*' --contains abc1234 --exit-on tag-created
+```
+
 ## Output Format
 
 Each event is printed as a single line of JSON to **stdout**:
@@ -126,6 +151,8 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 | `merge-queue-removed` | The PR left the merge queue without merging (e.g. kicked out on failure) |
 | `pr-merged` | The PR was merged (terminal) |
 | `pr-closed` | The PR was closed (terminal) |
+| `new-commit` | A new commit was pushed to a watched branch |
+| `tag-created` | A new tag appeared (in `--contains` mode, only tags including the target commit; `"preexisting": true` if it already existed at watch start) |
 
 ## Errors
 

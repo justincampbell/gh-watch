@@ -18,6 +18,7 @@ import (
 	"github.com/justincampbell/gh-watch/internal/output"
 	"github.com/justincampbell/gh-watch/internal/poller"
 	"github.com/justincampbell/gh-watch/internal/pr"
+	"github.com/justincampbell/gh-watch/internal/tag"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,8 @@ func main() {
 		interval time.Duration
 		exit     bool
 		exitOn   []string
+		tagMatch string
+		contains string
 	)
 
 	rootCmd := &cobra.Command{
@@ -178,9 +181,52 @@ func main() {
 		},
 	}
 
+	tagCmd := &cobra.Command{
+		Use:   "tag",
+		Short: "Watch for new tags",
+		Long: "Monitors a repository's tags, polling for new tags as they are created.\n" +
+			"Use --match to filter tag names by glob, and --contains to report only\n" +
+			"tags whose commit includes a given commit (reporting immediately if such\n" +
+			"a tag already exists).",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, err := repository.Current()
+			if err != nil {
+				return fmt.Errorf("detecting repository: %w", err)
+			}
+
+			owner := repo.Owner
+			repoName := repo.Name
+
+			writer := &output.Writer{JSON: os.Stdout}
+
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
+
+			fetcher := tag.NewFetcher()
+
+			return poller.Run(ctx, poller.Config[tag.State]{
+				Fetch: func() (*tag.State, error) {
+					return fetcher.Fetch(owner, repoName, tagMatch, contains)
+				},
+				Diff: func(old, new *tag.State) []events.Event {
+					return events.DiffTag(old, new)
+				},
+				Strategy: &poller.FixedStrategy{
+					Duration: interval,
+				},
+				OnEvents: writer.WriteEvents,
+				ExitOn:   buildExitOnEvents(exit, exitOn),
+			})
+		},
+	}
+	tagCmd.Flags().StringVar(&tagMatch, "match", "", "Glob to filter tag names (default: all tags)")
+	tagCmd.Flags().StringVar(&contains, "contains", "", "Only report tags whose commit contains this commit SHA")
+
 	rootCmd.AddCommand(prCmd)
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(branchCmd)
+	rootCmd.AddCommand(tagCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

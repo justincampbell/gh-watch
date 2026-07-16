@@ -4,15 +4,17 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 
 ## Architecture
 
-- `main.go` — CLI entry point (cobra). Root command + `pr` and `commit` subcommands.
+- `main.go` — CLI entry point (cobra). Root command + `pr`, `commit`, `branch`, and `tag` subcommands.
 - `internal/checks/` — Shared `CheckRun` type, CI summary helpers, and StatusContext mappers used by both PR and commit.
 - `internal/pr/` — PR state snapshot types and GraphQL fetcher (via go-gh SDK).
 - `internal/commit/` — Commit CI state snapshot types and GraphQL fetcher.
-- `internal/events/` — Event types and diffing logic. `ci.go` has shared CI diff logic; `diff.go` adds PR-specific events (reviews, comments, merge conflicts); `commit_diff.go` handles commit initial state.
+- `internal/branch/` — Branch head-commit snapshot types and GraphQL fetcher.
+- `internal/tag/` — Tag list snapshot types and fetcher. Lists tags via GraphQL; for `--contains`, resolves ancestry via the REST compare API (`api.DefaultRESTClient`) — the only REST usage in the repo — memoized per tag SHA.
+- `internal/events/` — Event types and diffing logic. `ci.go` has shared CI diff logic; `diff.go` adds PR-specific events (reviews, comments, merge conflicts); `commit_diff.go` handles commit initial state; `branch_diff.go` emits `new-commit`; `tag_diff.go` emits `tag-created`.
 - `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`). Wraps `Fetch` in `cenkalti/backoff/v5` to retry transient errors (default 5min budget per poll).
 - `internal/retry/` — Classifies API errors as transient (`IsTransient`): GitHub 5xx/429, network errors, request timeouts.
 - `internal/output/` — JSON to stdout.
-- `plugin/` — Claude Code plugin: provides skills for monitoring PRs and commits.
+- `plugin/` — Claude Code plugin: provides skills for monitoring PRs, commits, branches, and tags.
 
 ## Key design decisions
 
