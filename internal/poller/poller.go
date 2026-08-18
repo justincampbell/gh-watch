@@ -36,7 +36,7 @@ type Config[S any] struct {
 	ExitOn     []events.EventType
 
 	// RetryBudget caps the total wall-clock time spent retrying transient
-	// errors per poll. Zero uses the default (5 minutes).
+	// errors per poll. Zero uses the default (30 minutes).
 	RetryBudget time.Duration
 
 	// RetryNotifyOut is where retry notices are written (defaults to stderr).
@@ -83,7 +83,9 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 	}
 }
 
-const defaultRetryBudget = 5 * time.Minute
+// defaultRetryBudget is deliberately generous: a watch should outlive a
+// multi-minute GitHub incident rather than exit mid-outage.
+const defaultRetryBudget = 30 * time.Minute
 
 func fetchWithRetry[S any](ctx context.Context, fetch func() (*S, error), budget time.Duration, notifyOut io.Writer) (*S, error) {
 	if budget <= 0 {
@@ -101,6 +103,9 @@ func fetchWithRetry[S any](ctx context.Context, fetch func() (*S, error), budget
 		if !retry.IsTransient(err) {
 			return nil, backoff.Permanent(err)
 		}
+		if after, ok := retry.RetryAfter(err); ok {
+			return nil, fmt.Errorf("%w (%w)", err, &backoff.RetryAfterError{Duration: after})
+		}
 		return nil, err
 	}
 
@@ -108,13 +113,19 @@ func fetchWithRetry[S any](ctx context.Context, fetch func() (*S, error), budget
 	bo.InitialInterval = 1 * time.Second
 	bo.MaxInterval = 30 * time.Second
 
+	var retries int
 	notify := func(err error, next time.Duration) {
+		retries++
 		fmt.Fprintf(notifyOut, "transient error: %v (retrying in %s)\n", err, next.Round(time.Millisecond))
 	}
 
-	return backoff.Retry(ctx, op,
+	state, err := backoff.Retry(ctx, op,
 		backoff.WithBackOff(bo),
 		backoff.WithMaxElapsedTime(budget),
 		backoff.WithNotify(notify),
 	)
+	if err == nil && retries > 0 {
+		fmt.Fprintf(notifyOut, "recovered after %d transient error(s)\n", retries)
+	}
+	return state, err
 }

@@ -11,8 +11,8 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 - `internal/branch/` — Branch head-commit snapshot types and GraphQL fetcher.
 - `internal/tag/` — Tag list snapshot types and fetcher. Lists tags via GraphQL; for `--contains`, resolves ancestry via the REST compare API (`api.DefaultRESTClient`) — the only REST usage in the repo — memoized per tag SHA.
 - `internal/events/` — Event types and diffing logic. `ci.go` has shared CI diff logic; `diff.go` adds PR-specific events (reviews, comments, merge conflicts); `commit_diff.go` handles commit initial state; `branch_diff.go` emits `new-commit`; `tag_diff.go` emits `tag-created`.
-- `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`). Wraps `Fetch` in `cenkalti/backoff/v5` to retry transient errors (default 5min budget per poll).
-- `internal/retry/` — Classifies API errors as transient (`IsTransient`): GitHub 5xx/429, network errors, request timeouts.
+- `internal/poller/` — Generic poller using Go generics (`Config[S any]`). Pluggable strategy interface (currently `FixedStrategy`). Wraps `Fetch` in `cenkalti/backoff/v5` to retry transient errors (default 30min budget per poll, so a watch outlives a GitHub incident).
+- `internal/retry/` — Classifies API errors as transient (`IsTransient`): GitHub 5xx/429, secondary rate limits (403 + `Retry-After`, surfaced via `RetryAfter`), GraphQL `INTERNAL` errors returned with HTTP 200, network errors, timeouts, and malformed bodies.
 - `internal/output/` — JSON to stdout.
 - `plugin/` — Claude Code plugin: provides skills for monitoring PRs, commits, branches, and tags.
 

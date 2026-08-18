@@ -156,7 +156,15 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 
 ## Errors
 
-Transient GitHub failures (HTTP 5xx, 429, network timeouts) are retried automatically with exponential backoff, up to a 5-minute budget per poll. Retry attempts are logged to **stderr** so the JSON event stream on stdout stays clean. Non-transient errors (4xx, auth failures) exit immediately.
+Transient GitHub failures are retried automatically with jittered exponential backoff, up to a 30-minute budget per poll — long enough to ride out a GitHub incident instead of aborting the watch. Treated as transient:
+
+- HTTP 5xx and 429
+- Secondary rate limits (403 with a `Retry-After` header, whose delay is honored)
+- GraphQL `INTERNAL` errors, which GitHub returns with HTTP 200
+- Network errors, DNS failures, and request timeouts
+- Truncated or non-JSON response bodies
+
+Retries and recovery are logged to **stderr** so the JSON event stream on stdout stays clean. Everything else — 401, 404, genuine 403 permission errors, invalid arguments — exits non-zero immediately.
 
 ## Development
 
