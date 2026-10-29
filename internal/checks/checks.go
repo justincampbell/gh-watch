@@ -1,5 +1,11 @@
 package checks
 
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
 // CheckRun represents a CI check or status context on a commit.
 type CheckRun struct {
 	Name       string
@@ -69,4 +75,47 @@ func StatusContextStateToConclusion(s string) string {
 	default:
 		return s
 	}
+}
+
+// Ignore matches check names to drop from snapshots.
+type Ignore []*regexp.Regexp
+
+// ParseIgnore compiles globs where `*` matches any run of characters,
+// including the `/` in "Workflow / job" names, and `?` matches one.
+func ParseIgnore(globs []string) (Ignore, error) {
+	var ig Ignore
+	for _, g := range globs {
+		pattern := regexp.QuoteMeta(g)
+		pattern = strings.ReplaceAll(pattern, `\*`, `.*`)
+		pattern = strings.ReplaceAll(pattern, `\?`, `.`)
+		re, err := regexp.Compile("^" + pattern + "$")
+		if err != nil {
+			return nil, fmt.Errorf("invalid --ignore-check %q: %w", g, err)
+		}
+		ig = append(ig, re)
+	}
+	return ig, nil
+}
+
+// Filter returns runs whose names match no ignore pattern.
+func (ig Ignore) Filter(runs []CheckRun) []CheckRun {
+	if len(ig) == 0 {
+		return runs
+	}
+	var kept []CheckRun
+	for _, r := range runs {
+		if !ig.matches(r.Name) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
+func (ig Ignore) matches(name string) bool {
+	for _, re := range ig {
+		if re.MatchString(name) {
+			return true
+		}
+	}
+	return false
 }

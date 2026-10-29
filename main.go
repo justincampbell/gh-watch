@@ -13,6 +13,7 @@ import (
 	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/justincampbell/gh-watch/internal/branch"
+	"github.com/justincampbell/gh-watch/internal/checks"
 	"github.com/justincampbell/gh-watch/internal/commit"
 	"github.com/justincampbell/gh-watch/internal/events"
 	"github.com/justincampbell/gh-watch/internal/output"
@@ -27,8 +28,9 @@ func main() {
 		interval time.Duration
 		exit     bool
 		exitOn   []string
-		tagMatch string
-		contains string
+		tagMatch    string
+		contains    string
+		ignoreCheck []string
 	)
 
 	rootCmd := &cobra.Command{
@@ -68,6 +70,11 @@ func main() {
 				}
 			}
 
+			ignore, err := checks.ParseIgnore(ignoreCheck)
+			if err != nil {
+				return err
+			}
+
 			writer := &output.Writer{JSON: os.Stdout}
 
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -77,7 +84,12 @@ func main() {
 
 			return poller.Run(ctx, poller.Config[pr.State]{
 				Fetch: func() (*pr.State, error) {
-					return fetcher.Fetch(owner, repoName, number)
+					state, err := fetcher.Fetch(owner, repoName, number)
+					if err != nil {
+						return nil, err
+					}
+					state.CheckRuns = ignore.Filter(state.CheckRuns)
+					return state, nil
 				},
 				Diff: func(old, new *pr.State) []events.Event {
 					return events.Diff(old, new)
@@ -117,6 +129,11 @@ func main() {
 				repoName = repo.Name
 			}
 
+			ignore, err := checks.ParseIgnore(ignoreCheck)
+			if err != nil {
+				return err
+			}
+
 			writer := &output.Writer{JSON: os.Stdout}
 
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -126,7 +143,12 @@ func main() {
 
 			return poller.Run(ctx, poller.Config[commit.State]{
 				Fetch: func() (*commit.State, error) {
-					return fetcher.Fetch(owner, repoName, sha)
+					state, err := fetcher.Fetch(owner, repoName, sha)
+					if err != nil {
+						return nil, err
+					}
+					state.CheckRuns = ignore.Filter(state.CheckRuns)
+					return state, nil
 				},
 				Diff: func(old, new *commit.State) []events.Event {
 					return events.DiffCommit(old, new)
@@ -219,6 +241,9 @@ func main() {
 				ExitOn:   buildExitOnEvents(exit, exitOn),
 			})
 		},
+	}
+	for _, cmd := range []*cobra.Command{prCmd, commitCmd} {
+		cmd.Flags().StringArrayVar(&ignoreCheck, "ignore-check", nil, "Ignore checks whose name matches this glob (repeatable; * matches across /)")
 	}
 	tagCmd.Flags().StringVar(&tagMatch, "match", "", "Glob to filter tag names (default: all tags)")
 	tagCmd.Flags().StringVar(&contains, "contains", "", "Only report tags whose commit contains this commit SHA")

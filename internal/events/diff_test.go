@@ -486,3 +486,31 @@ func TestDiff_CommentAddedWhileAnotherDeleted(t *testing.T) {
 		t.Fatalf("expected one CommentAdded, got %v", events)
 	}
 }
+
+func TestDiff_CIFailed_OneEventListsAllFailures(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
+		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		{Name: "test", Status: "IN_PROGRESS"},
+		{Name: "build", Status: "IN_PROGRESS"},
+	}}
+	new := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
+		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		{Name: "test", Status: "COMPLETED", Conclusion: "TIMED_OUT"},
+		{Name: "build", Status: "COMPLETED", Conclusion: "FAILURE"},
+	}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CIFailed {
+		t.Fatalf("expected one CIFailed, got %v", events)
+	}
+	d := events[0].Details
+	if d["name"] != "test" || d["conclusion"] != "TIMED_OUT" {
+		t.Errorf("expected first newly failed check test/TIMED_OUT, got %v/%v", d["name"], d["conclusion"])
+	}
+	failed := d["failed"].([]map[string]interface{})
+	if len(failed) != 3 {
+		t.Fatalf("expected 3 failed checks, got %d", len(failed))
+	}
+	if failed[0]["new"] != false || failed[1]["new"] != true || failed[2]["new"] != true {
+		t.Errorf("unexpected new flags: %v", failed)
+	}
+}
