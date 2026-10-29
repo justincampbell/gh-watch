@@ -1,6 +1,11 @@
 package events
 
-import "time"
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+)
 
 // EventType identifies the kind of state change detected.
 type EventType string
@@ -26,6 +31,31 @@ const (
 	BranchDeleted           EventType = "branch-deleted"
 	TagCreated              EventType = "tag-created"
 )
+
+// Selectable lists the event types accepted by --events.
+var Selectable = []EventType{
+	CIAllPassed, CIFailed, ReviewSubmitted, CommentAdded, MergeConflictChanged,
+	ReadyForReview, ConvertedToDraft, AutoMergeEnabled, AutoMergeDisabled,
+	MergeQueueEntered, MergeQueueStatusChanged, MergeQueueRemoved,
+	PRMerged, PRClosed, NewCommit, TagCreated,
+}
+
+// ParseSelection validates event type names given to --events.
+func ParseSelection(names []string) ([]EventType, error) {
+	var out []EventType
+	for _, n := range names {
+		t := EventType(n)
+		if !slices.Contains(Selectable, t) {
+			valid := make([]string, len(Selectable))
+			for i, s := range Selectable {
+				valid[i] = string(s)
+			}
+			return nil, fmt.Errorf("unknown event type %q (valid: %s)", n, strings.Join(valid, ", "))
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
 
 // Event represents a detected state change.
 type Event struct {

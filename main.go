@@ -25,22 +25,30 @@ import (
 
 func main() {
 	var (
-		interval time.Duration
-		exit     bool
-		exitOn   []string
+		interval    time.Duration
+		exit        bool
+		exitOn      []string
 		tagMatch    string
 		contains    string
 		ignoreCheck []string
+		eventNames  []string
+		eventTypes  []events.EventType
 	)
 
 	rootCmd := &cobra.Command{
 		Use:   "watch",
 		Short: "Watch GitHub resources for state changes",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			eventTypes, err = events.ParseSelection(eventNames)
+			return err
+		},
 	}
 
 	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
 	rootCmd.PersistentFlags().BoolVar(&exit, "exit", false, "Exit after any state change (shorthand for --exit-on any)")
 	rootCmd.PersistentFlags().StringSliceVar(&exitOn, "exit-on", nil, `Exit after specific event types (e.g. --exit-on ci-passed,ci-failed)`)
+	rootCmd.PersistentFlags().StringSliceVar(&eventNames, "events", nil, "Only emit these event types (initial-state and terminal events always emit)")
 	rootCmd.SilenceUsage = true
 
 	prCmd := &cobra.Command{
@@ -102,6 +110,7 @@ func main() {
 				},
 				OnEvents: writer.WriteEvents,
 				ExitOn:   buildExitOnEvents(exit, exitOn),
+				Events:   eventTypes,
 			})
 		},
 	}
@@ -161,6 +170,7 @@ func main() {
 				},
 				OnEvents: writer.WriteEvents,
 				ExitOn:   buildExitOnEvents(exit, exitOn),
+				Events:   eventTypes,
 			})
 		},
 	}
@@ -199,6 +209,7 @@ func main() {
 				},
 				OnEvents: writer.WriteEvents,
 				ExitOn:   buildExitOnEvents(exit, exitOn),
+				Events:   eventTypes,
 			})
 		},
 	}
@@ -239,6 +250,7 @@ func main() {
 				},
 				OnEvents: writer.WriteEvents,
 				ExitOn:   buildExitOnEvents(exit, exitOn),
+				Events:   eventTypes,
 			})
 		},
 	}

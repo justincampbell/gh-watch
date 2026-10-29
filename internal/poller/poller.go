@@ -35,6 +35,10 @@ type Config[S any] struct {
 	OnEvents   func([]events.Event)
 	ExitOn     []events.EventType
 
+	// Events limits output to these types; empty emits everything.
+	// initial-state, terminal, and ExitOn events always pass.
+	Events []events.EventType
+
 	// RetryBudget caps the total wall-clock time spent retrying transient
 	// errors per poll. Zero uses the default (30 minutes).
 	RetryBudget time.Duration
@@ -54,7 +58,7 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 			return err
 		}
 
-		detected := cfg.Diff(lastState, state)
+		detected := cfg.filter(cfg.Diff(lastState, state))
 		lastState = state
 
 		if len(detected) > 0 && cfg.OnEvents != nil {
@@ -81,6 +85,36 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 		case <-time.After(cfg.Strategy.Interval()):
 		}
 	}
+}
+
+func (cfg Config[S]) filter(detected []events.Event) []events.Event {
+	if len(cfg.Events) == 0 {
+		return detected
+	}
+	var kept []events.Event
+	for _, e := range detected {
+		if cfg.passes(e) {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
+func (cfg Config[S]) passes(e events.Event) bool {
+	if e.Event == events.InitialState || (cfg.IsTerminal != nil && cfg.IsTerminal(e)) {
+		return true
+	}
+	for _, t := range cfg.Events {
+		if t == e.Event {
+			return true
+		}
+	}
+	for _, t := range cfg.ExitOn {
+		if t == e.Event {
+			return true
+		}
+	}
+	return false
 }
 
 // defaultRetryBudget is deliberately generous: a watch should outlive a

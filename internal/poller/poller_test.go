@@ -196,3 +196,41 @@ func (t *stubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Host = t.target.Host
 	return http.DefaultTransport.RoundTrip(req)
 }
+
+func TestRunFiltersEvents(t *testing.T) {
+	var emitted []events.EventType
+	cfg := Config[int]{
+		Fetch: func() (*int, error) { v := 1; return &v, nil },
+		Diff: func(_, _ *int) []events.Event {
+			return []events.Event{
+				{Event: events.InitialState},
+				{Event: events.CommentAdded},
+				{Event: events.CIFailed},
+				{Event: events.ReviewSubmitted},
+				{Event: events.PRMerged},
+			}
+		},
+		IsTerminal: func(e events.Event) bool { return e.Event == events.PRMerged },
+		Strategy:   &FixedStrategy{Duration: time.Hour},
+		Events:     []events.EventType{events.CIFailed},
+		ExitOn:     []events.EventType{events.ReviewSubmitted},
+		OnEvents: func(es []events.Event) {
+			for _, e := range es {
+				emitted = append(emitted, e.Event)
+			}
+		},
+	}
+
+	if err := Run(context.Background(), cfg); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	want := []events.EventType{events.InitialState, events.CIFailed, events.ReviewSubmitted, events.PRMerged}
+	if len(emitted) != len(want) {
+		t.Fatalf("expected %v, got %v", want, emitted)
+	}
+	for i := range want {
+		if emitted[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, emitted)
+		}
+	}
+}
