@@ -20,6 +20,7 @@ import (
 	"github.com/justincampbell/gh-watch/internal/output"
 	"github.com/justincampbell/gh-watch/internal/poller"
 	"github.com/justincampbell/gh-watch/internal/pr"
+	"github.com/justincampbell/gh-watch/internal/state"
 	"github.com/justincampbell/gh-watch/internal/tag"
 	"github.com/spf13/cobra"
 )
@@ -34,6 +35,7 @@ func main() {
 		ignoreCheck []string
 		search      string
 		skipAuthor  []string
+		resume      bool
 		eventNames  []string
 		eventTypes  []events.EventType
 	)
@@ -51,6 +53,7 @@ func main() {
 	rootCmd.PersistentFlags().DurationVar(&interval, "interval", 60*time.Second, "Polling interval")
 	rootCmd.PersistentFlags().BoolVar(&exit, "exit", false, "Exit after any state change (shorthand for --exit-on any)")
 	rootCmd.PersistentFlags().StringSliceVar(&exitOn, "exit-on", nil, `Exit after specific event types (e.g. --exit-on ci-passed,ci-failed)`)
+	rootCmd.PersistentFlags().BoolVar(&resume, "resume", false, "Pick up where the last run of this same watch left off, reporting what changed in between")
 	rootCmd.PersistentFlags().StringSliceVar(&eventNames, "events", nil, "Only emit these event types (initial-state and terminal events always emit)")
 	rootCmd.SilenceUsage = true
 
@@ -92,7 +95,12 @@ func main() {
 				}
 				searcher := &pr.SearchFetcher{Owner: owner, Repo: repoName, Query: search, Single: fetcher}
 				var prev *pr.SetState
+				store, err := openStore(resume, watchKey("pr-search", owner, repoName, search), func(s *pr.SetState) { prev = s })
+				if err != nil {
+					return err
+				}
 				return poller.Run(ctx, poller.Config[pr.SetState]{
+					Store: store,
 					Fetch: func() (*pr.SetState, error) {
 						set, err := searcher.Fetch(prev)
 						if err != nil {
@@ -129,7 +137,13 @@ func main() {
 				}
 			}
 
+			store, err := openStore[pr.State](resume, watchKey("pr", owner, repoName, strconv.Itoa(number)), nil)
+			if err != nil {
+				return err
+			}
+
 			return poller.Run(ctx, poller.Config[pr.State]{
+				Store: store,
 				Fetch: func() (*pr.State, error) {
 					state, err := fetcher.Fetch(owner, repoName, number)
 					if err != nil {
@@ -189,7 +203,13 @@ func main() {
 
 			fetcher := commit.NewFetcher()
 
+			store, err := openStore[commit.State](resume, watchKey("commit", owner, repoName, sha), nil)
+			if err != nil {
+				return err
+			}
+
 			return poller.Run(ctx, poller.Config[commit.State]{
+				Store: store,
 				Fetch: func() (*commit.State, error) {
 					state, err := fetcher.Fetch(owner, repoName, sha)
 					if err != nil {
@@ -242,7 +262,12 @@ func main() {
 			fetcher := branch.NewFetcher()
 
 			var since string
+			store, err := openStore(resume, watchKey("branch", owner, repoName, branchName), func(s *branch.State) { since = s.SHA })
+			if err != nil {
+				return err
+			}
 			return poller.Run(ctx, poller.Config[branch.State]{
+				Store: store,
 				Fetch: func() (*branch.State, error) {
 					return fetcher.Fetch(owner, repoName, branchName, since)
 				},
@@ -284,7 +309,13 @@ func main() {
 
 			fetcher := tag.NewFetcher()
 
+			store, err := openStore[tag.State](resume, watchKey("tag", owner, repoName, tagMatch, contains), nil)
+			if err != nil {
+				return err
+			}
+
 			return poller.Run(ctx, poller.Config[tag.State]{
+				Store: store,
 				Fetch: func() (*tag.State, error) {
 					return fetcher.Fetch(owner, repoName, tagMatch, contains)
 				},
@@ -352,6 +383,40 @@ func parseCommitURL(s string) (*commitRef, error) {
 		repo:  parts[1],
 		sha:   parts[3],
 	}, nil
+}
+
+func watchKey(parts ...string) string {
+	return strings.Join(parts, "\x00")
+}
+
+// openStore returns nil unless --resume is set. seed, if given, receives the
+// loaded snapshot so fetchers that depend on the previous state can use it
+// on the first poll.
+func openStore[S any](resume bool, key string, seed func(*S)) (poller.Store[S], error) {
+	if !resume {
+		return nil, nil
+	}
+	f, err := state.New[S](key)
+	if err != nil {
+		return nil, err
+	}
+	if seed == nil {
+		return f, nil
+	}
+	return seededStore[S]{f, seed}, nil
+}
+
+type seededStore[S any] struct {
+	poller.Store[S]
+	seed func(*S)
+}
+
+func (s seededStore[S]) Load() (*S, error) {
+	loaded, err := s.Store.Load()
+	if loaded != nil {
+		s.seed(loaded)
+	}
+	return loaded, err
 }
 
 // resolveLogins replaces @me with the authenticated user's login.

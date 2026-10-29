@@ -234,3 +234,41 @@ func TestRunFiltersEvents(t *testing.T) {
 		}
 	}
 }
+
+type memStore struct {
+	saved   *int
+	cleared bool
+}
+
+func (m *memStore) Load() (*int, error) { return m.saved, nil }
+func (m *memStore) Save(s *int) error   { m.saved = s; return nil }
+func (m *memStore) Clear() error        { m.cleared = true; return nil }
+
+func TestRunResumesFromStore(t *testing.T) {
+	prev := 1
+	store := &memStore{saved: &prev}
+	var diffedFrom *int
+	cfg := Config[int]{
+		Fetch: func() (*int, error) { v := 2; return &v, nil },
+		Diff: func(old, _ *int) []events.Event {
+			diffedFrom = old
+			return []events.Event{{Event: events.PRMerged}}
+		},
+		IsTerminal: func(e events.Event) bool { return e.Event == events.PRMerged },
+		Strategy:   &FixedStrategy{Duration: time.Hour},
+		Store:      store,
+	}
+
+	if err := Run(context.Background(), cfg); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if diffedFrom == nil || *diffedFrom != 1 {
+		t.Errorf("expected first diff against the stored snapshot, got %v", diffedFrom)
+	}
+	if store.saved == nil || *store.saved != 2 {
+		t.Errorf("expected new snapshot saved, got %v", store.saved)
+	}
+	if !store.cleared {
+		t.Error("expected store cleared after terminal event")
+	}
+}

@@ -26,6 +26,13 @@ func (s *FixedStrategy) Interval() time.Duration {
 	return s.Duration
 }
 
+// Store persists snapshots between runs.
+type Store[S any] interface {
+	Load() (*S, error)
+	Save(*S) error
+	Clear() error
+}
+
 // Config configures the poller for any watchable resource type S.
 type Config[S any] struct {
 	Fetch      func() (*S, error)
@@ -39,6 +46,10 @@ type Config[S any] struct {
 	// initial-state, terminal, and ExitOn events always pass.
 	Events []events.EventType
 
+	// Store, when set, seeds the first diff with the previous run's last
+	// snapshot and persists each new one. Cleared on a terminal event.
+	Store Store[S]
+
 	// RetryBudget caps the total wall-clock time spent retrying transient
 	// errors per poll. Zero uses the default (30 minutes).
 	RetryBudget time.Duration
@@ -50,7 +61,7 @@ type Config[S any] struct {
 
 // Run polls for state changes until the context is cancelled or a terminal event occurs.
 func Run[S any](ctx context.Context, cfg Config[S]) error {
-	var lastState *S
+	lastState := cfg.load()
 
 	for {
 		state, err := fetchWithRetry(ctx, cfg.Fetch, cfg.RetryBudget, cfg.RetryNotifyOut)
@@ -60,6 +71,7 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 
 		detected := cfg.filter(cfg.Diff(lastState, state))
 		lastState = state
+		cfg.save(state)
 
 		if len(detected) > 0 && cfg.OnEvents != nil {
 			cfg.OnEvents(detected)
@@ -70,6 +82,7 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 				continue
 			}
 			if cfg.IsTerminal != nil && cfg.IsTerminal(e) {
+				cfg.clear()
 				return nil
 			}
 			for _, exitOn := range cfg.ExitOn {
@@ -85,6 +98,45 @@ func Run[S any](ctx context.Context, cfg Config[S]) error {
 		case <-time.After(cfg.Strategy.Interval()):
 		}
 	}
+}
+
+// Store failures are reported but never end a watch: losing resumability is
+// better than losing the watch.
+func (cfg Config[S]) load() *S {
+	if cfg.Store == nil {
+		return nil
+	}
+	s, err := cfg.Store.Load()
+	if err != nil {
+		fmt.Fprintf(cfg.notifyOut(), "resume: %v (starting fresh)\n", err)
+		return nil
+	}
+	return s
+}
+
+func (cfg Config[S]) save(s *S) {
+	if cfg.Store == nil {
+		return
+	}
+	if err := cfg.Store.Save(s); err != nil {
+		fmt.Fprintf(cfg.notifyOut(), "resume: saving state: %v\n", err)
+	}
+}
+
+func (cfg Config[S]) clear() {
+	if cfg.Store == nil {
+		return
+	}
+	if err := cfg.Store.Clear(); err != nil {
+		fmt.Fprintf(cfg.notifyOut(), "resume: clearing state: %v\n", err)
+	}
+}
+
+func (cfg Config[S]) notifyOut() io.Writer {
+	if cfg.RetryNotifyOut != nil {
+		return cfg.RetryNotifyOut
+	}
+	return os.Stderr
 }
 
 func (cfg Config[S]) filter(detected []events.Event) []events.Event {
