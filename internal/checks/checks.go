@@ -12,6 +12,20 @@ type CheckRun struct {
 	Status     string // "QUEUED", "IN_PROGRESS", "COMPLETED"
 	Conclusion string // "SUCCESS", "FAILURE", "NEUTRAL", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", ""
 	URL        string
+
+	// FailureConfirmed is set once the same failure has been seen on two
+	// consecutive polls of the same head commit.
+	FailureConfirmed bool
+}
+
+// ConfirmFailures marks every current failure as confirmed. Used when a
+// snapshot is first reported, since its failures are already in that report.
+func ConfirmFailures(runs []CheckRun) {
+	for i := range runs {
+		if runs[i].IsFailed() {
+			runs[i].FailureConfirmed = true
+		}
+	}
 }
 
 // IsFailed returns true if the check concluded with a failure state.

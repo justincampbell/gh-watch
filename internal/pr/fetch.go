@@ -39,6 +39,7 @@ type node struct {
 	Commits struct {
 		Nodes []struct {
 			Commit struct {
+				OID               string `json:"oid"`
 				StatusCheckRollup struct {
 					Contexts struct {
 						Nodes []struct {
@@ -94,6 +95,7 @@ const fragment = `fragment prFields on PullRequest {
 	commits(last: 1) {
 		nodes {
 			commit {
+				oid
 				statusCheckRollup {
 					contexts(first: 100) {
 						nodes {
@@ -186,6 +188,7 @@ func (pr node) toState() *State {
 	}
 
 	if len(pr.Commits.Nodes) > 0 {
+		state.HeadSHA = pr.Commits.Nodes[0].Commit.OID
 		contexts := pr.Commits.Nodes[0].Commit.StatusCheckRollup.Contexts.Nodes
 		for _, ctx := range contexts {
 			if ctx.TypeName == "CheckRun" {

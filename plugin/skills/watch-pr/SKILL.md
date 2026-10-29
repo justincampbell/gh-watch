@@ -75,7 +75,7 @@ If no PR number is provided, the PR for the current branch is detected automatic
 |-------|-------------|
 | `initial-state` | Snapshot of PR state at the moment watching started (always emitted first) |
 | `ci-passed` | All CI checks passed |
-| `ci-failed` | CI failed; `details.failed` lists every failing check with its conclusion, `new: true` on the ones that just failed |
+| `ci-failed` | CI failed, confirmed on two consecutive polls of the same head commit (so it arrives one interval late, but brief false failures are dropped). `details.sha` is the head; `details.failed` lists every confirmed failure with its conclusion, `new: true` on the ones just confirmed |
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
 | `merge-conflict-changed` | Mergeable settled to a different value (MERGEABLE ↔ CONFLICTING) |

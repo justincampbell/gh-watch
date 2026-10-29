@@ -123,33 +123,60 @@ func TestDiff_CIAllPassed(t *testing.T) {
 	}
 }
 
-func TestDiff_CIFailed_Immediate(t *testing.T) {
-	old := &pr.State{
-		Number: 1,
-		Status: "open",
-		CheckRuns: []checks.CheckRun{
-			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
-			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
-		},
-	}
-	new := &pr.State{
-		Number: 1,
-		Status: "open",
-		CheckRuns: []checks.CheckRun{
-			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
+func TestDiff_CIFailed_ConfirmedOnSecondPoll(t *testing.T) {
+	pending := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{
+		{Name: "test", Status: "IN_PROGRESS"},
+		{Name: "lint", Status: "IN_PROGRESS"},
+	}}
+	failing := func() *pr.State {
+		return &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{
+			{Name: "test", Status: "IN_PROGRESS"},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
-		},
+		}}
 	}
-	events := Diff(old, new)
 
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event (immediate ci-failed), got %d", len(events))
+	first := failing()
+	if events := Diff(pending, first); len(events) != 0 {
+		t.Fatalf("expected no event on first sighting, got %v", events)
 	}
-	if events[0].Event != CIFailed {
-		t.Errorf("expected CIFailed, got %s", events[0].Event)
+	second := failing()
+	events := Diff(first, second)
+	if len(events) != 1 || events[0].Event != CIFailed {
+		t.Fatalf("expected CIFailed once confirmed, got %v", events)
 	}
-	if events[0].Details["name"] != "lint" {
-		t.Errorf("expected failed check name 'lint', got %v", events[0].Details["name"])
+	if events[0].Details["name"] != "lint" || events[0].Details["sha"] != "abc" {
+		t.Errorf("unexpected details: %v", events[0].Details)
+	}
+	if events := Diff(second, failing()); len(events) != 0 {
+		t.Errorf("expected no repeat once reported, got %v", events)
+	}
+}
+
+func TestDiff_CIFailed_TransientFailureIgnored(t *testing.T) {
+	pending := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "IN_PROGRESS"}}}
+	blip := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	back := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "IN_PROGRESS"}}}
+	if n := len(Diff(pending, blip)) + len(Diff(blip, back)); n != 0 {
+		t.Errorf("expected no events for a one-poll failure, got %d", n)
+	}
+}
+
+func TestDiff_CIFailed_NotConfirmedAcrossHeadChange(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	new := &pr.State{Number: 1, Status: "open", HeadSHA: "def", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	if events := Diff(old, new); len(events) != 0 {
+		t.Errorf("expected a new head's failure to need its own confirmation, got %v", events)
+	}
+}
+
+func TestDiff_CIFailed_PreexistingFailureNotReported(t *testing.T) {
+	failing := func() *pr.State {
+		return &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	}
+	first := failing()
+	Diff(nil, first)
+	if events := Diff(first, failing()); len(events) != 0 {
+		t.Errorf("expected failures shown in initial-state not to be re-reported, got %v", events)
 	}
 }
 
@@ -187,7 +214,7 @@ func TestDiff_CIFailed_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
 		Status: "open",
 		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
-			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", FailureConfirmed: true},
 		},
 	}
 	new := &pr.State{
@@ -489,9 +516,9 @@ func TestDiff_CommentAddedWhileAnotherDeleted(t *testing.T) {
 
 func TestDiff_CIFailed_OneEventListsAllFailures(t *testing.T) {
 	old := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
-		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
-		{Name: "test", Status: "IN_PROGRESS"},
-		{Name: "build", Status: "IN_PROGRESS"},
+		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", FailureConfirmed: true},
+		{Name: "test", Status: "COMPLETED", Conclusion: "TIMED_OUT"},
+		{Name: "build", Status: "COMPLETED", Conclusion: "FAILURE"},
 	}}
 	new := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
 		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},

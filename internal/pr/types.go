@@ -20,6 +20,7 @@ type State struct {
 
 	AutoMerge *AutoMerge // nil when auto-merge is not enabled
 
+	HeadSHA   string // commit the CheckRuns belong to
 	CheckRuns []checks.CheckRun
 	Reviews   []Review
 	Comments  []Comment

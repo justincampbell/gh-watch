@@ -21,7 +21,7 @@ A `gh` CLI extension that watches GitHub resources for state changes. See README
 
 - Named `gh-watch` (not `gh-watch-pr`) to support future subcommands like `gh watch commit`, `gh watch branch`.
 - Poller uses generics so it's reusable for future watch targets beyond PRs.
-- Only aggregate CI events are emitted (`ci-passed`, `ci-failed`) — individual check transitions are noise. At most one per poll; `ci-failed` lists every failing check.
+- Only aggregate CI events are emitted (`ci-passed`, `ci-failed`) — individual check transitions are noise. At most one per poll; `ci-failed` lists every failing check. A failure must appear on two consecutive polls of the same head SHA before it's reported (tracked via `CheckRun.FailureConfirmed`), because CI providers briefly post failures for superseded runs.
 - Snapshots carry the last *settled* mergeable value (UNKNOWN carries the previous one forward), so the recompute after every base-branch merge is silent.
 - Fetchers that depend on the previous snapshot (`--search` refetch, branch commit listing) get it through closure state in `main.go`, seeded from the `--resume` store on startup.
 - Dependencies: `go-gh/v2` (GitHub API/auth), `cobra` (CLI), `cenkalti/backoff/v5` (retry). Auth is inherited from `gh` automatically.

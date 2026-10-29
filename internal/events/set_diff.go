@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/justincampbell/gh-watch/internal/checks"
 	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
@@ -20,11 +21,13 @@ func DiffSet(old, new *pr.SetState) []Event {
 	for _, number := range slices.Sorted(maps.Keys(new.PRs)) {
 		state := new.PRs[number]
 		if old == nil {
+			checks.ConfirmFailures(state.CheckRuns)
 			out = append(out, initialStateEvent(state, now))
 			continue
 		}
 		prev, ok := old.PRs[number]
 		if !ok {
+			checks.ConfirmFailures(state.CheckRuns)
 			out = append(out, addedEvent(state, now))
 			continue
 		}

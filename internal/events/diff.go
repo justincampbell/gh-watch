@@ -46,12 +46,13 @@ func diffPR(old, new *pr.State) []Event {
 	}
 
 	if old == nil {
+		checks.ConfirmFailures(new.CheckRuns)
 		events = append(events, initialStateEvent(new, now))
 		return events
 	}
 
 	// CI changes
-	events = append(events, diffCI(old.CheckRuns, new.CheckRuns, now)...)
+	events = append(events, diffCI(old.HeadSHA, old.CheckRuns, new.HeadSHA, new.CheckRuns, now)...)
 
 	events = append(events, diffDraft(old, new, now)...)
 	events = append(events, diffAutoMerge(old, new, now)...)

@@ -12,10 +12,11 @@ import (
 // If old is nil, this is the initial fetch.
 func DiffCommit(old, new *commit.State) []Event {
 	if old == nil {
+		checks.ConfirmFailures(new.CheckRuns)
 		return []Event{commitInitialStateEvent(new, time.Now())}
 	}
 
-	return diffCI(old.CheckRuns, new.CheckRuns, time.Now())
+	return diffCI(old.SHA, old.CheckRuns, new.SHA, new.CheckRuns, time.Now())
 }
 
 func commitInitialStateEvent(state *commit.State, now time.Time) Event {
