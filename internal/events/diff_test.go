@@ -215,7 +215,7 @@ func TestDiff_ReviewSubmitted(t *testing.T) {
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "APPROVED", Body: "LGTM!"},
+			{ID: "r1", Author: "alice", State: "APPROVED", Body: "LGTM!"},
 		},
 	}
 	events := Diff(old, new)
@@ -375,16 +375,16 @@ func TestDiff_MultipleNewReviews(t *testing.T) {
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "COMMENTED"},
+			{ID: "r1", Author: "alice", State: "COMMENTED"},
 		},
 	}
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "COMMENTED"},
-			{Author: "bob", State: "APPROVED"},
-			{Author: "carol", State: "CHANGES_REQUESTED"},
+			{ID: "r1", Author: "alice", State: "COMMENTED"},
+			{ID: "r2", Author: "bob", State: "APPROVED"},
+			{ID: "r3", Author: "carol", State: "CHANGES_REQUESTED"},
 		},
 	}
 	events := Diff(old, new)
@@ -407,5 +407,82 @@ func TestTruncate(t *testing.T) {
 	}
 	if got := truncate("line1\nline2", 20); got != "line1 line2" {
 		t.Errorf("expected 'line1 line2', got '%s'", got)
+	}
+}
+
+func TestDiff_MergeConflictAcrossUnknown(t *testing.T) {
+	s1 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	s2 := &pr.State{Number: 1, Status: "open", Mergeable: "UNKNOWN"}
+	s3 := &pr.State{Number: 1, Status: "open", Mergeable: "CONFLICTING"}
+
+	if events := Diff(s1, s2); len(events) != 0 {
+		t.Fatalf("expected no events while recomputing, got %d", len(events))
+	}
+	if s2.Mergeable != "MERGEABLE" {
+		t.Fatalf("expected settled MERGEABLE carried forward, got %s", s2.Mergeable)
+	}
+	events := Diff(s2, s3)
+	if len(events) != 1 || events[0].Event != MergeConflictChanged {
+		t.Fatalf("expected MergeConflictChanged, got %v", events)
+	}
+	if events[0].Details["old"] != "MERGEABLE" {
+		t.Errorf("expected old MERGEABLE, got %v", events[0].Details["old"])
+	}
+}
+
+func TestDiff_MergeableFlapIsSilent(t *testing.T) {
+	s1 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	s2 := &pr.State{Number: 1, Status: "open", Mergeable: "UNKNOWN"}
+	s3 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	if n := len(Diff(s1, s2)) + len(Diff(s2, s3)); n != 0 {
+		t.Errorf("expected no events for an UNKNOWN flap, got %d", n)
+	}
+}
+
+func TestDiff_ReadyForReview(t *testing.T) {
+	old := &pr.State{Number: 7, Status: "open", IsDraft: true}
+	new := &pr.State{Number: 7, Status: "open"}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != ReadyForReview {
+		t.Fatalf("expected ReadyForReview, got %v", events)
+	}
+	if events[0].Details["number"] != 7 {
+		t.Errorf("expected number 7, got %v", events[0].Details["number"])
+	}
+}
+
+func TestDiff_ConvertedToDraft(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open"}
+	new := &pr.State{Number: 1, Status: "open", IsDraft: true}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != ConvertedToDraft {
+		t.Fatalf("expected ConvertedToDraft, got %v", events)
+	}
+}
+
+func TestDiff_AutoMerge(t *testing.T) {
+	off := &pr.State{Number: 1, Status: "open"}
+	on := &pr.State{Number: 1, Status: "open", AutoMerge: &pr.AutoMerge{MergeMethod: "SQUASH", EnabledBy: "alice"}}
+
+	events := Diff(off, on)
+	if len(events) != 1 || events[0].Event != AutoMergeEnabled {
+		t.Fatalf("expected AutoMergeEnabled, got %v", events)
+	}
+	if events[0].Details["enabled_by"] != "alice" {
+		t.Errorf("expected enabled_by alice, got %v", events[0].Details["enabled_by"])
+	}
+
+	events = Diff(on, &pr.State{Number: 1, Status: "open"})
+	if len(events) != 1 || events[0].Event != AutoMergeDisabled {
+		t.Fatalf("expected AutoMergeDisabled, got %v", events)
+	}
+}
+
+func TestDiff_CommentAddedWhileAnotherDeleted(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{{ID: "1"}, {ID: "2"}}}
+	new := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{{ID: "1"}, {ID: "3", Author: "bob"}}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CommentAdded {
+		t.Fatalf("expected one CommentAdded, got %v", events)
 	}
 }

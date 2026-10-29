@@ -9,9 +9,19 @@ import (
 	"github.com/justincampbell/gh-watch/internal/pr"
 )
 
-// Diff compares old and new PR states and returns detected events.
-// If old is nil, this is the initial fetch and only terminal states are reported.
+// Diff compares old and new PR states and returns detected events, each
+// tagged with the PR number. If old is nil, this is the initial fetch.
+// new's mergeable value is settled against old in place.
 func Diff(old, new *pr.State) []Event {
+	new.SettleMergeable(old)
+	events := diffPR(old, new)
+	for _, e := range events {
+		e.Details["number"] = new.Number
+	}
+	return events
+}
+
+func diffPR(old, new *pr.State) []Event {
 	now := time.Now()
 	var events []Event
 
@@ -43,9 +53,15 @@ func Diff(old, new *pr.State) []Event {
 	// CI changes
 	events = append(events, diffCI(old.CheckRuns, new.CheckRuns, now)...)
 
-	// Review changes
-	if len(new.Reviews) > len(old.Reviews) {
-		for _, review := range new.Reviews[len(old.Reviews):] {
+	events = append(events, diffDraft(old, new, now)...)
+	events = append(events, diffAutoMerge(old, new, now)...)
+
+	seenReviews := make(map[string]bool, len(old.Reviews))
+	for _, r := range old.Reviews {
+		seenReviews[r.ID] = true
+	}
+	for _, review := range new.Reviews {
+		if !seenReviews[review.ID] {
 			events = append(events, Event{
 				Timestamp: now,
 				Event:     ReviewSubmitted,
@@ -59,9 +75,12 @@ func Diff(old, new *pr.State) []Event {
 		}
 	}
 
-	// Comment changes
-	if len(new.Comments) > len(old.Comments) {
-		for _, comment := range new.Comments[len(old.Comments):] {
+	seenComments := make(map[string]bool, len(old.Comments))
+	for _, c := range old.Comments {
+		seenComments[c.ID] = true
+	}
+	for _, comment := range new.Comments {
+		if !seenComments[comment.ID] {
 			events = append(events, Event{
 				Timestamp: now,
 				Event:     CommentAdded,
@@ -74,7 +93,7 @@ func Diff(old, new *pr.State) []Event {
 		}
 	}
 
-	// Mergeable state change
+	// Values are settled, so UNKNOWN here means GitHub hasn't computed one since the watch began.
 	if old.Mergeable != new.Mergeable && new.Mergeable != "UNKNOWN" && old.Mergeable != "UNKNOWN" {
 		summary := fmt.Sprintf("Merge conflict status: %s → %s", old.Mergeable, new.Mergeable)
 		events = append(events, Event{
@@ -94,6 +113,49 @@ func Diff(old, new *pr.State) []Event {
 	events = append(events, diffMergeQueue(old, new, now)...)
 
 	return events
+}
+
+func diffDraft(old, new *pr.State, now time.Time) []Event {
+	switch {
+	case old.IsDraft && !new.IsDraft:
+		return []Event{{
+			Timestamp: now,
+			Event:     ReadyForReview,
+			Summary:   fmt.Sprintf("PR #%d marked ready for review", new.Number),
+			Details:   map[string]interface{}{},
+		}}
+	case !old.IsDraft && new.IsDraft:
+		return []Event{{
+			Timestamp: now,
+			Event:     ConvertedToDraft,
+			Summary:   fmt.Sprintf("PR #%d converted to draft", new.Number),
+			Details:   map[string]interface{}{},
+		}}
+	}
+	return nil
+}
+
+func diffAutoMerge(old, new *pr.State, now time.Time) []Event {
+	switch {
+	case old.AutoMerge == nil && new.AutoMerge != nil:
+		return []Event{{
+			Timestamp: now,
+			Event:     AutoMergeEnabled,
+			Summary:   fmt.Sprintf("Auto-merge (%s) enabled by %s", strings.ToLower(new.AutoMerge.MergeMethod), new.AutoMerge.EnabledBy),
+			Details: map[string]interface{}{
+				"merge_method": new.AutoMerge.MergeMethod,
+				"enabled_by":   new.AutoMerge.EnabledBy,
+			},
+		}}
+	case old.AutoMerge != nil && new.AutoMerge == nil:
+		return []Event{{
+			Timestamp: now,
+			Event:     AutoMergeDisabled,
+			Summary:   "Auto-merge disabled",
+			Details:   map[string]interface{}{},
+		}}
+	}
+	return nil
 }
 
 // diffMergeQueue detects merge queue lifecycle transitions between two PR states.
@@ -167,9 +229,16 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 		}
 	}
 
-	// Mergeable
+	if state.IsDraft {
+		parts = append(parts, "draft")
+	}
+
 	if state.Mergeable == "CONFLICTING" {
 		parts = append(parts, "has merge conflicts")
+	}
+
+	if state.AutoMerge != nil {
+		parts = append(parts, "auto-merge enabled")
 	}
 
 	// Merge queue
@@ -190,6 +259,8 @@ func initialStateEvent(state *pr.State, now time.Time) Event {
 			"number":            state.Number,
 			"title":             state.Title,
 			"status":            state.Status,
+			"draft":             state.IsDraft,
+			"auto_merge":        state.AutoMerge != nil,
 			"mergeable":         state.Mergeable,
 			"in_merge_queue":    state.InMergeQueue,
 			"merge_queue_state": state.MergeQueueState,
