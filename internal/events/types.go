@@ -27,6 +27,8 @@ const (
 	MergeQueueRemoved       EventType = "merge-queue-removed"
 	PRMerged                EventType = "pr-merged"
 	PRClosed                EventType = "pr-closed"
+	PRAdded                 EventType = "pr-added"
+	PRRemoved               EventType = "pr-removed"
 	NewCommit               EventType = "new-commit"
 	BranchDeleted           EventType = "branch-deleted"
 	TagCreated              EventType = "tag-created"
@@ -37,7 +39,7 @@ var Selectable = []EventType{
 	CIAllPassed, CIFailed, ReviewSubmitted, CommentAdded, MergeConflictChanged,
 	ReadyForReview, ConvertedToDraft, AutoMergeEnabled, AutoMergeDisabled,
 	MergeQueueEntered, MergeQueueStatusChanged, MergeQueueRemoved,
-	PRMerged, PRClosed, NewCommit, TagCreated,
+	PRMerged, PRClosed, PRAdded, PRRemoved, NewCommit, TagCreated,
 }
 
 // ParseSelection validates event type names given to --events.

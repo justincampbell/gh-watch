@@ -31,6 +31,7 @@ func main() {
 		tagMatch    string
 		contains    string
 		ignoreCheck []string
+		search      string
 		eventNames  []string
 		eventTypes  []events.EventType
 	)
@@ -52,10 +53,13 @@ func main() {
 	rootCmd.SilenceUsage = true
 
 	prCmd := &cobra.Command{
-		Use:   "pr [<number>]",
-		Short: "Watch a pull request for state changes",
-		Long:  "Monitors a pull request, polling for changes and printing updates as they occur.",
-		Args:  cobra.MaximumNArgs(1),
+		Use:   "pr [<number> | --search <query>]",
+		Short: "Watch a pull request, or every PR matching a search, for state changes",
+		Long: "Monitors a pull request, polling for changes and printing updates as they occur.\n" +
+			"With --search, watches every PR in the current repository matching the query\n" +
+			"(any `gh pr list --search` query), re-running it each interval so PRs join and\n" +
+			"leave the set.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repo, err := repository.Current()
 			if err != nil {
@@ -64,6 +68,51 @@ func main() {
 
 			owner := repo.Owner
 			repoName := repo.Name
+
+			ignore, err := checks.ParseIgnore(ignoreCheck)
+			if err != nil {
+				return err
+			}
+
+			writer := &output.Writer{JSON: os.Stdout}
+
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
+
+			fetcher := pr.NewFetcher()
+
+			if search != "" {
+				if len(args) > 0 {
+					return fmt.Errorf("pass a PR number or --search, not both")
+				}
+				if err := pr.ValidateSearch(search); err != nil {
+					return err
+				}
+				searcher := &pr.SearchFetcher{Owner: owner, Repo: repoName, Query: search, Single: fetcher}
+				var prev *pr.SetState
+				return poller.Run(ctx, poller.Config[pr.SetState]{
+					Fetch: func() (*pr.SetState, error) {
+						set, err := searcher.Fetch(prev)
+						if err != nil {
+							return nil, err
+						}
+						for _, state := range set.PRs {
+							state.CheckRuns = ignore.Filter(state.CheckRuns)
+						}
+						return set, nil
+					},
+					Diff: func(old, new *pr.SetState) []events.Event {
+						prev = new
+						return events.DiffSet(old, new)
+					},
+					Strategy: &poller.FixedStrategy{
+						Duration: interval,
+					},
+					OnEvents: writer.WriteEvents,
+					ExitOn:   buildExitOnEvents(exit, exitOn),
+					Events:   eventTypes,
+				})
+			}
 
 			var number int
 			if len(args) == 1 {
@@ -77,18 +126,6 @@ func main() {
 					return err
 				}
 			}
-
-			ignore, err := checks.ParseIgnore(ignoreCheck)
-			if err != nil {
-				return err
-			}
-
-			writer := &output.Writer{JSON: os.Stdout}
-
-			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-			defer cancel()
-
-			fetcher := pr.NewFetcher()
 
 			return poller.Run(ctx, poller.Config[pr.State]{
 				Fetch: func() (*pr.State, error) {
@@ -254,6 +291,7 @@ func main() {
 			})
 		},
 	}
+	prCmd.Flags().StringVar(&search, "search", "", `Watch every PR in this repo matching a search query (e.g. "author:@me is:open")`)
 	for _, cmd := range []*cobra.Command{prCmd, commitCmd} {
 		cmd.Flags().StringArrayVar(&ignoreCheck, "ignore-check", nil, "Ignore checks whose name matches this glob (repeatable; * matches across /)")
 	}
