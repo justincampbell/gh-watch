@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cli/go-gh/v2"
+	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/justincampbell/gh-watch/internal/branch"
 	"github.com/justincampbell/gh-watch/internal/checks"
@@ -32,6 +33,7 @@ func main() {
 		contains    string
 		ignoreCheck []string
 		search      string
+		skipAuthor  []string
 		eventNames  []string
 		eventTypes  []events.EventType
 	)
@@ -227,6 +229,11 @@ func main() {
 			repoName := repo.Name
 			branchName := args[0]
 
+			skip, err := resolveLogins(skipAuthor)
+			if err != nil {
+				return err
+			}
+
 			writer := &output.Writer{JSON: os.Stdout}
 
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -234,12 +241,14 @@ func main() {
 
 			fetcher := branch.NewFetcher()
 
+			var since string
 			return poller.Run(ctx, poller.Config[branch.State]{
 				Fetch: func() (*branch.State, error) {
-					return fetcher.Fetch(owner, repoName, branchName)
+					return fetcher.Fetch(owner, repoName, branchName, since)
 				},
 				Diff: func(old, new *branch.State) []events.Event {
-					return events.DiffBranch(old, new)
+					since = new.SHA
+					return events.SkipAuthors(events.DiffBranch(old, new), skip)
 				},
 				Strategy: &poller.FixedStrategy{
 					Duration: interval,
@@ -291,6 +300,7 @@ func main() {
 			})
 		},
 	}
+	branchCmd.Flags().StringArrayVar(&skipAuthor, "skip-author", nil, "Don't report commits by this login (repeatable; @me for yourself)")
 	prCmd.Flags().StringVar(&search, "search", "", `Watch every PR in this repo matching a search query (e.g. "author:@me is:open")`)
 	for _, cmd := range []*cobra.Command{prCmd, commitCmd} {
 		cmd.Flags().StringArrayVar(&ignoreCheck, "ignore-check", nil, "Ignore checks whose name matches this glob (repeatable; * matches across /)")
@@ -342,6 +352,27 @@ func parseCommitURL(s string) (*commitRef, error) {
 		repo:  parts[1],
 		sha:   parts[3],
 	}, nil
+}
+
+// resolveLogins replaces @me with the authenticated user's login.
+func resolveLogins(logins []string) ([]string, error) {
+	out := make([]string, 0, len(logins))
+	for _, l := range logins {
+		if l != "@me" {
+			out = append(out, strings.TrimPrefix(l, "@"))
+			continue
+		}
+		client, err := api.DefaultGraphQLClient()
+		if err != nil {
+			return nil, fmt.Errorf("creating GraphQL client: %w", err)
+		}
+		var resp struct{ Viewer struct{ Login string } }
+		if err := client.Do(`query { viewer { login } }`, nil, &resp); err != nil {
+			return nil, fmt.Errorf("resolving @me: %w", err)
+		}
+		out = append(out, resp.Viewer.Login)
+	}
+	return out, nil
 }
 
 func detectPRForCurrentBranch() (int, error) {
