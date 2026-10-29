@@ -46,6 +46,19 @@ gh watch <command> [flags]
 
 Watch a pull request for state changes. If no PR number is given, the PR for the current branch is detected automatically.
 
+#### `gh watch pr --search <query> [flags]`
+
+Watch every PR in the current repository matching a search query (anything `gh pr list --search` accepts, including `@me`). The query is re-run each interval with one GraphQL search, so new PRs join (`pr-added`) and PRs that stop matching leave (`pr-removed`). A PR that drops out of an `is:open` query by merging or closing reports `pr-merged` / `pr-closed` instead, and the watch keeps going. Every event carries `details.number`. Up to 100 PRs; `repo:`, `org:`, and `user:` qualifiers are rejected.
+
+```
+gh watch pr --search "author:@me is:open label:release"
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--search` | Watch every PR matching this query | |
+| `--ignore-check` | Ignore checks whose name matches this glob (repeatable; `*` matches across `/`). Ignored checks never fire `ci-failed` and don't block `ci-passed`. Also on `commit`. | |
+
 #### `gh watch commit <sha-or-url> [flags]`
 
 Watch a commit for CI status changes. Exits automatically when all checks complete.
@@ -59,7 +72,11 @@ gh watch commit https://github.com/owner/repo/commit/abc1234
 
 #### `gh watch branch <name> [flags]`
 
-Watch a branch for new commits pushed to it.
+Watch a branch for new commits pushed to it. Every commit that lands between polls gets its own `new-commit` event, oldest first; if the branch was rewritten, only the new head is reported, with `"force_pushed": true`. When the headline names a PR (a squash's `(#123)` suffix or `Merge pull request #123`), the event includes `pr_number`.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--skip-author` | Don't report commits by this login (repeatable; `@me` for yourself) | |
 
 #### `gh watch tag [flags]`
 
@@ -82,6 +99,14 @@ gh watch tag --match 'v*' --contains abc1234
 | `--interval` | Polling interval | `60s` |
 | `--exit` | Exit after any state change | `false` |
 | `--exit-on` | Exit after specific event types (comma-separated) | |
+| `--events` | Only emit these event types (comma-separated). `initial-state`, terminal events, and `--exit-on` types always come through. | all |
+| `--resume` | Pick up where the last run of this same watch left off (see below) | `false` |
+
+### Resuming
+
+With `--resume`, each poll's snapshot is saved to `$XDG_STATE_HOME/gh-watch` (default `~/.local/state/gh-watch`), keyed by repository, subcommand, and target (PR number, search query, SHA, branch, or tag filters). The next `--resume` run of the same watch compares its first poll against that snapshot instead of emitting `initial-state`, so anything that changed in between is reported. Use this to re-arm a monitor that gets killed on a schedule without losing events. A terminal event (PR merged or closed, commit CI finished) clears the saved state.
+
+It reports the net change between snapshots, not every step in between: a check that failed and then passed while nothing was watching shows up as passing. Branch watches replay every commit. Changing `--ignore-check` between runs can produce spurious CI events on the first poll.
 
 ### Examples
 
@@ -142,15 +167,21 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 |-------|-------------|
 | `initial-state` | Snapshot of current state (always first, never triggers `--exit` or `--exit-on`) |
 | `ci-passed` | All required checks are passing |
-| `ci-failed` | A required check has failed |
+| `ci-failed` | A check failed. One event per poll: `name`/`conclusion`/`url` describe the first newly failed check, and `failed` lists every failing check with `new` marking the ones that just failed |
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
-| `merge-conflict-changed` | The PR's mergeable state changed |
+| `merge-conflict-changed` | The PR's mergeable state settled to a different value (MERGEABLE ↔ CONFLICTING). The UNKNOWN blips GitHub shows while it recomputes after every merge to the base branch are ignored |
+| `ready-for-review` | A draft PR was marked ready for review |
+| `converted-to-draft` | The PR was converted back to a draft |
+| `auto-merge-enabled` | Auto-merge was enabled (`merge_method`, `enabled_by`) |
+| `auto-merge-disabled` | Auto-merge was disabled |
 | `merge-queue-entered` | The PR was added to the merge queue |
 | `merge-queue-status-changed` | The PR's merge queue entry changed state (e.g. `AWAITING_CHECKS` → `UNMERGEABLE`) |
 | `merge-queue-removed` | The PR left the merge queue without merging (e.g. kicked out on failure) |
-| `pr-merged` | The PR was merged (terminal) |
-| `pr-closed` | The PR was closed (terminal) |
+| `pr-merged` | The PR was merged (terminal, except under `--search`) |
+| `pr-closed` | The PR was closed (terminal, except under `--search`) |
+| `pr-added` | A PR started matching a `--search` query (details like `initial-state`) |
+| `pr-removed` | An open PR stopped matching a `--search` query |
 | `new-commit` | A new commit was pushed to a watched branch |
 | `tag-created` | A new tag appeared (in `--contains` mode, only tags including the target commit; `"preexisting": true` if it already existed at watch start) |
 
