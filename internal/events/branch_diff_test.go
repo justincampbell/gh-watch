@@ -94,3 +94,55 @@ func TestDiffBranch_NoAuthor(t *testing.T) {
 		t.Errorf("expected no author key when author is empty")
 	}
 }
+
+func TestDiffBranch_EveryCommitSinceLastHead(t *testing.T) {
+	old := &branch.State{Name: "main", SHA: "aaa"}
+	new := &branch.State{
+		Name: "main", SHA: "ccc", MessageHeadline: "Merge pull request #12 from x/y",
+		Since: "aaa",
+		Commits: []branch.Commit{
+			{SHA: "bbb", MessageHeadline: "Fix thing (#11)", Author: "alice"},
+			{SHA: "ccc", MessageHeadline: "Merge pull request #12 from x/y", Author: "bob"},
+		},
+	}
+	events := DiffBranch(old, new)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Details["sha"] != "bbb" || events[0].Details["previous_sha"] != "aaa" || events[0].Details["pr_number"] != 11 {
+		t.Errorf("unexpected first commit details: %v", events[0].Details)
+	}
+	if events[1].Details["previous_sha"] != "bbb" || events[1].Details["pr_number"] != 12 {
+		t.Errorf("unexpected second commit details: %v", events[1].Details)
+	}
+}
+
+func TestDiffBranch_StaleCommitListFallsBackToHead(t *testing.T) {
+	old := &branch.State{Name: "main", SHA: "zzz"}
+	new := &branch.State{Name: "main", SHA: "ccc", Since: "aaa", Commits: []branch.Commit{{SHA: "bbb"}, {SHA: "ccc"}}}
+	events := DiffBranch(old, new)
+	if len(events) != 1 || events[0].Details["sha"] != "ccc" {
+		t.Fatalf("expected head-only event, got %v", events)
+	}
+}
+
+func TestDiffBranch_ForcePushed(t *testing.T) {
+	old := &branch.State{Name: "main", SHA: "aaa"}
+	new := &branch.State{Name: "main", SHA: "ccc", Since: "aaa", ForcePushed: true}
+	events := DiffBranch(old, new)
+	if len(events) != 1 || events[0].Details["force_pushed"] != true {
+		t.Fatalf("expected one force-pushed event, got %v", events)
+	}
+}
+
+func TestSkipAuthors(t *testing.T) {
+	evts := []Event{
+		{Event: InitialState, Details: map[string]interface{}{"author": "me"}},
+		{Event: NewCommit, Details: map[string]interface{}{"author": "me"}},
+		{Event: NewCommit, Details: map[string]interface{}{"author": "alice"}},
+	}
+	kept := SkipAuthors(evts, []string{"me"})
+	if len(kept) != 2 || kept[1].Details["author"] != "alice" {
+		t.Errorf("unexpected kept events: %v", kept)
+	}
+}

@@ -12,7 +12,7 @@ gh extension install justincampbell/gh-watch
 
 ## Usage
 
-Use the `/watch-pr` skill to monitor a PR after pushing code or when waiting for CI/reviews.
+Use the `/watch-pr` skill to monitor a PR after pushing code or when waiting for CI/reviews, or a whole set of PRs with `--search`.
 
 Use the `/watch-commit` skill to monitor a commit's CI checks — useful when waiting for a build to finish on a specific SHA.
 

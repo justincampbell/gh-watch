@@ -123,33 +123,60 @@ func TestDiff_CIAllPassed(t *testing.T) {
 	}
 }
 
-func TestDiff_CIFailed_Immediate(t *testing.T) {
-	old := &pr.State{
-		Number: 1,
-		Status: "open",
-		CheckRuns: []checks.CheckRun{
-			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
-			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
-		},
-	}
-	new := &pr.State{
-		Number: 1,
-		Status: "open",
-		CheckRuns: []checks.CheckRun{
-			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
+func TestDiff_CIFailed_ConfirmedOnSecondPoll(t *testing.T) {
+	pending := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{
+		{Name: "test", Status: "IN_PROGRESS"},
+		{Name: "lint", Status: "IN_PROGRESS"},
+	}}
+	failing := func() *pr.State {
+		return &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{
+			{Name: "test", Status: "IN_PROGRESS"},
 			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
-		},
+		}}
 	}
-	events := Diff(old, new)
 
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event (immediate ci-failed), got %d", len(events))
+	first := failing()
+	if events := Diff(pending, first); len(events) != 0 {
+		t.Fatalf("expected no event on first sighting, got %v", events)
 	}
-	if events[0].Event != CIFailed {
-		t.Errorf("expected CIFailed, got %s", events[0].Event)
+	second := failing()
+	events := Diff(first, second)
+	if len(events) != 1 || events[0].Event != CIFailed {
+		t.Fatalf("expected CIFailed once confirmed, got %v", events)
 	}
-	if events[0].Details["name"] != "lint" {
-		t.Errorf("expected failed check name 'lint', got %v", events[0].Details["name"])
+	if events[0].Details["name"] != "lint" || events[0].Details["sha"] != "abc" {
+		t.Errorf("unexpected details: %v", events[0].Details)
+	}
+	if events := Diff(second, failing()); len(events) != 0 {
+		t.Errorf("expected no repeat once reported, got %v", events)
+	}
+}
+
+func TestDiff_CIFailed_TransientFailureIgnored(t *testing.T) {
+	pending := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "IN_PROGRESS"}}}
+	blip := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	back := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "IN_PROGRESS"}}}
+	if n := len(Diff(pending, blip)) + len(Diff(blip, back)); n != 0 {
+		t.Errorf("expected no events for a one-poll failure, got %d", n)
+	}
+}
+
+func TestDiff_CIFailed_NotConfirmedAcrossHeadChange(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	new := &pr.State{Number: 1, Status: "open", HeadSHA: "def", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	if events := Diff(old, new); len(events) != 0 {
+		t.Errorf("expected a new head's failure to need its own confirmation, got %v", events)
+	}
+}
+
+func TestDiff_CIFailed_PreexistingFailureNotReported(t *testing.T) {
+	failing := func() *pr.State {
+		return &pr.State{Number: 1, Status: "open", HeadSHA: "abc", CheckRuns: []checks.CheckRun{{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"}}}
+	}
+	first := failing()
+	Diff(nil, first)
+	if events := Diff(first, failing()); len(events) != 0 {
+		t.Errorf("expected failures shown in initial-state not to be re-reported, got %v", events)
 	}
 }
 
@@ -187,7 +214,7 @@ func TestDiff_CIFailed_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
 		Status: "open",
 		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
-			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", FailureConfirmed: true},
 		},
 	}
 	new := &pr.State{
@@ -215,7 +242,7 @@ func TestDiff_ReviewSubmitted(t *testing.T) {
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "APPROVED", Body: "LGTM!"},
+			{ID: "r1", Author: "alice", State: "APPROVED", Body: "LGTM!"},
 		},
 	}
 	events := Diff(old, new)
@@ -375,16 +402,16 @@ func TestDiff_MultipleNewReviews(t *testing.T) {
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "COMMENTED"},
+			{ID: "r1", Author: "alice", State: "COMMENTED"},
 		},
 	}
 	new := &pr.State{
 		Number: 1,
 		Status: "open",
 		Reviews: []pr.Review{
-			{Author: "alice", State: "COMMENTED"},
-			{Author: "bob", State: "APPROVED"},
-			{Author: "carol", State: "CHANGES_REQUESTED"},
+			{ID: "r1", Author: "alice", State: "COMMENTED"},
+			{ID: "r2", Author: "bob", State: "APPROVED"},
+			{ID: "r3", Author: "carol", State: "CHANGES_REQUESTED"},
 		},
 	}
 	events := Diff(old, new)
@@ -407,5 +434,129 @@ func TestTruncate(t *testing.T) {
 	}
 	if got := truncate("line1\nline2", 20); got != "line1 line2" {
 		t.Errorf("expected 'line1 line2', got '%s'", got)
+	}
+}
+
+func TestDiff_MergeConflictAcrossUnknown(t *testing.T) {
+	s1 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	s2 := &pr.State{Number: 1, Status: "open", Mergeable: "UNKNOWN"}
+	s3 := &pr.State{Number: 1, Status: "open", Mergeable: "CONFLICTING"}
+
+	if events := Diff(s1, s2); len(events) != 0 {
+		t.Fatalf("expected no events while recomputing, got %d", len(events))
+	}
+	if s2.Mergeable != "MERGEABLE" {
+		t.Fatalf("expected settled MERGEABLE carried forward, got %s", s2.Mergeable)
+	}
+	events := Diff(s2, s3)
+	if len(events) != 1 || events[0].Event != MergeConflictChanged {
+		t.Fatalf("expected MergeConflictChanged, got %v", events)
+	}
+	if events[0].Details["old"] != "MERGEABLE" {
+		t.Errorf("expected old MERGEABLE, got %v", events[0].Details["old"])
+	}
+}
+
+func TestDiff_MergeableFlapIsSilent(t *testing.T) {
+	s1 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	s2 := &pr.State{Number: 1, Status: "open", Mergeable: "UNKNOWN"}
+	s3 := &pr.State{Number: 1, Status: "open", Mergeable: "MERGEABLE"}
+	if n := len(Diff(s1, s2)) + len(Diff(s2, s3)); n != 0 {
+		t.Errorf("expected no events for an UNKNOWN flap, got %d", n)
+	}
+}
+
+func TestDiff_ReadyForReview(t *testing.T) {
+	old := &pr.State{Number: 7, Status: "open", IsDraft: true}
+	new := &pr.State{Number: 7, Status: "open"}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != ReadyForReview {
+		t.Fatalf("expected ReadyForReview, got %v", events)
+	}
+	if events[0].Details["number"] != 7 {
+		t.Errorf("expected number 7, got %v", events[0].Details["number"])
+	}
+}
+
+func TestDiff_ConvertedToDraft(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open"}
+	new := &pr.State{Number: 1, Status: "open", IsDraft: true}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != ConvertedToDraft {
+		t.Fatalf("expected ConvertedToDraft, got %v", events)
+	}
+}
+
+func TestDiff_AutoMerge(t *testing.T) {
+	off := &pr.State{Number: 1, Status: "open"}
+	on := &pr.State{Number: 1, Status: "open", AutoMerge: &pr.AutoMerge{MergeMethod: "SQUASH", EnabledBy: "alice"}}
+
+	events := Diff(off, on)
+	if len(events) != 1 || events[0].Event != AutoMergeEnabled {
+		t.Fatalf("expected AutoMergeEnabled, got %v", events)
+	}
+	if events[0].Details["enabled_by"] != "alice" {
+		t.Errorf("expected enabled_by alice, got %v", events[0].Details["enabled_by"])
+	}
+
+	events = Diff(on, &pr.State{Number: 1, Status: "open"})
+	if len(events) != 1 || events[0].Event != AutoMergeDisabled {
+		t.Fatalf("expected AutoMergeDisabled, got %v", events)
+	}
+}
+
+func TestDiff_CommentAddedWhileAnotherDeleted(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{{ID: "1"}, {ID: "2"}}}
+	new := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{{ID: "1"}, {ID: "3", Author: "bob"}}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CommentAdded {
+		t.Fatalf("expected one CommentAdded, got %v", events)
+	}
+}
+
+func TestDiff_CIFailed_OneEventListsAllFailures(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
+		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", FailureConfirmed: true},
+		{Name: "test", Status: "COMPLETED", Conclusion: "TIMED_OUT"},
+		{Name: "build", Status: "COMPLETED", Conclusion: "FAILURE"},
+	}}
+	new := &pr.State{Number: 1, Status: "open", CheckRuns: []checks.CheckRun{
+		{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+		{Name: "test", Status: "COMPLETED", Conclusion: "TIMED_OUT"},
+		{Name: "build", Status: "COMPLETED", Conclusion: "FAILURE"},
+	}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CIFailed {
+		t.Fatalf("expected one CIFailed, got %v", events)
+	}
+	d := events[0].Details
+	if d["name"] != "test" || d["conclusion"] != "TIMED_OUT" {
+		t.Errorf("expected first newly failed check test/TIMED_OUT, got %v/%v", d["name"], d["conclusion"])
+	}
+	failed := d["failed"].([]map[string]interface{})
+	if len(failed) != 3 {
+		t.Fatalf("expected 3 failed checks, got %d", len(failed))
+	}
+	if failed[0]["new"] != false || failed[1]["new"] != true || failed[2]["new"] != true {
+		t.Errorf("unexpected new flags: %v", failed)
+	}
+}
+
+func TestDiff_CommentEdited(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{
+		{ID: "c1", Author: "review-bot", Body: "Summary\n\nLast reviewed commit: abc"},
+		{ID: "c2", Author: "bob", Body: "unchanged"},
+	}}
+	new := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{
+		{ID: "c1", Author: "review-bot", Body: "Summary\n\nLast reviewed commit: def", URL: "https://example.com/c1"},
+		{ID: "c2", Author: "bob", Body: "unchanged"},
+	}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CommentEdited {
+		t.Fatalf("expected one CommentEdited, got %v", events)
+	}
+	d := events[0].Details
+	if d["id"] != "c1" || d["author"] != "review-bot" || d["number"] != 1 || d["url"] != "https://example.com/c1" {
+		t.Errorf("unexpected details: %v", d)
 	}
 }

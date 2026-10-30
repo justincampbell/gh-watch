@@ -39,6 +39,8 @@ Run with the **Monitor tool** (not `Bash` with `run_in_background`). The first n
 - `description`: `Commits on $ARGUMENTS`
 - `persistent`: `true` (no timeout — stop with `TaskStop` or end of session)
 
+Add `--skip-author @me` to skip your own pushes, and `--resume` so that restarting an expired monitor with the same command replays every commit that landed in between.
+
 ## Flags
 
 | Flag | Description | Default |
@@ -46,13 +48,15 @@ Run with the **Monitor tool** (not `Bash` with `run_in_background`). The first n
 | `--interval <duration>` | Polling interval | `60s` |
 | `--exit` | Exit after any state change | `false` |
 | `--exit-on <events>` | Exit after specific event types (comma-separated) | |
+| `--skip-author <login>` | Don't report commits by this login (repeatable; `@me` for yourself) | |
+| `--resume` | Report what landed since the last run of this same watch | `false` |
 
 ## Event types
 
 | Event | Description |
 |-------|-------------|
 | `initial-state` | Snapshot of the branch tip at the moment watching started (always emitted first) |
-| `new-commit` | A new commit was pushed to the branch |
+| `new-commit` | One per commit that landed, oldest first. Includes `pr_number` when the headline names a PR, and `force_pushed: true` if the branch was rewritten (only the new head is reported then) |
 
 ## Output format
 

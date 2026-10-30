@@ -67,7 +67,7 @@ func TestDiffCommit_CIAllPassed(t *testing.T) {
 	}
 }
 
-func TestDiffCommit_CIFailed_Immediate(t *testing.T) {
+func TestDiffCommit_CIFailed_ConfirmedOnSecondPoll(t *testing.T) {
 	old := &commit.State{
 		SHA: "abc1234",
 		CheckRuns: []checks.CheckRun{
@@ -75,14 +75,20 @@ func TestDiffCommit_CIFailed_Immediate(t *testing.T) {
 			{Name: "lint", Status: "IN_PROGRESS", Conclusion: ""},
 		},
 	}
-	new := &commit.State{
-		SHA: "abc1234",
-		CheckRuns: []checks.CheckRun{
-			{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
-			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
-		},
+	failing := func() *commit.State {
+		return &commit.State{
+			SHA: "abc1234",
+			CheckRuns: []checks.CheckRun{
+				{Name: "test", Status: "IN_PROGRESS", Conclusion: ""},
+				{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", URL: "https://example.com/lint"},
+			},
+		}
 	}
-	events := DiffCommit(old, new)
+	first := failing()
+	if events := DiffCommit(old, first); len(events) != 0 {
+		t.Fatalf("expected no event on first sighting, got %v", events)
+	}
+	events := DiffCommit(first, failing())
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
 	}
@@ -136,7 +142,7 @@ func TestDiffCommit_NotReEmittedWhenAlreadyAllComplete(t *testing.T) {
 		SHA: "abc1234",
 		CheckRuns: []checks.CheckRun{
 			{Name: "test", Status: "COMPLETED", Conclusion: "SUCCESS"},
-			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE"},
+			{Name: "lint", Status: "COMPLETED", Conclusion: "FAILURE", FailureConfirmed: true},
 		},
 	}
 	new := &commit.State{

@@ -55,7 +55,7 @@ Run with the **Monitor tool** (not `Bash` with `run_in_background`). The first n
 |-------|-------------|
 | `initial-state` | Snapshot of commit CI state at the moment watching started (always emitted first) |
 | `ci-passed` | All CI checks passed (terminal — always exits) |
-| `ci-failed` | CI failed (at least one check failed) (terminal — always exits) |
+| `ci-failed` | CI failed, confirmed on two consecutive polls (terminal — always exits) |
 
 ## Output format
 

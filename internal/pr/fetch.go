@@ -20,58 +20,122 @@ func NewFetcher() Fetcher {
 	return &GraphQLFetcher{}
 }
 
-type graphQLResponse struct {
-	Repository struct {
-		PullRequest struct {
-			Number          int
-			Title           string
-			State           string
-			Mergeable       string
-			IsInMergeQueue  bool
-			MergeQueueEntry *struct {
-				State    string
-				Position int
-			}
-			Commits struct {
-				Nodes []struct {
-					Commit struct {
-						StatusCheckRollup struct {
-							Contexts struct {
-								Nodes []struct {
-									TypeName   string `json:"__typename"`
-									Name       string
-									Status     string
-									Conclusion string
-									DetailsURL string `json:"detailsUrl"`
-									Context    string
-									State      string
-									TargetURL  string `json:"targetUrl"`
-								}
-							} `graphql:"contexts(first: 100)"`
+// node mirrors the prFields fragment.
+type node struct {
+	Number          int
+	Title           string
+	State           string
+	IsDraft         bool
+	Mergeable       string
+	IsInMergeQueue  bool
+	MergeQueueEntry *struct {
+		State    string
+		Position int
+	}
+	AutoMergeRequest *struct {
+		MergeMethod string
+		EnabledBy   *struct{ Login string }
+	}
+	Commits struct {
+		Nodes []struct {
+			Commit struct {
+				OID               string `json:"oid"`
+				StatusCheckRollup struct {
+					Contexts struct {
+						Nodes []struct {
+							TypeName   string `json:"__typename"`
+							Name       string
+							Status     string
+							Conclusion string
+							DetailsURL string `json:"detailsUrl"`
+							Context    string
+							State      string
+							TargetURL  string `json:"targetUrl"`
 						}
 					}
 				}
-			} `graphql:"commits(last: 1)"`
-			Reviews struct {
-				Nodes []struct {
-					Author struct {
-						Login string
-					}
-					State string
-					Body  string
-				}
-			} `graphql:"reviews(last: 50)"`
-			Comments struct {
-				Nodes []struct {
-					ID        string
-					Author    struct{ Login string }
-					Body      string
-					CreatedAt time.Time
-				}
-			} `graphql:"comments(last: 50)"`
-		} `graphql:"pullRequest(number: $number)"`
-	} `graphql:"repository(owner: $owner, name: $repo)"`
+			}
+		}
+	}
+	Reviews struct {
+		Nodes []struct {
+			ID     string
+			Author struct{ Login string }
+			State  string
+			Body   string
+		}
+	}
+	Comments struct {
+		Nodes []struct {
+			ID        string
+			Author    struct{ Login string }
+			Body      string
+			URL       string
+			CreatedAt time.Time
+		}
+	}
 }
+
+// fragment selects every field needed to build a State. $last bounds reviews
+// and comments so set-mode searches can keep responses small.
+const fragment = `fragment prFields on PullRequest {
+	number
+	title
+	state
+	isDraft
+	mergeable
+	isInMergeQueue
+	mergeQueueEntry {
+		state
+		position
+	}
+	autoMergeRequest {
+		mergeMethod
+		enabledBy { login }
+	}
+	commits(last: 1) {
+		nodes {
+			commit {
+				oid
+				statusCheckRollup {
+					contexts(first: 100) {
+						nodes {
+							__typename
+							... on CheckRun {
+								name
+								status
+								conclusion
+								detailsUrl
+							}
+							... on StatusContext {
+								context
+								state
+								targetUrl
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	reviews(last: $last) {
+		nodes {
+			id
+			author { login }
+			state
+			body
+		}
+	}
+	comments(last: $last) {
+		nodes {
+			id
+			author { login }
+			body
+			url
+			createdAt
+		}
+	}
+}`
 
 func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 	client, err := api.DefaultGraphQLClient()
@@ -79,78 +143,38 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 		return nil, fmt.Errorf("creating GraphQL client: %w", err)
 	}
 
-	query := `query PRState($owner: String!, $repo: String!, $number: Int!) {
+	query := `query PRState($owner: String!, $repo: String!, $number: Int!, $last: Int!) {
 		repository(owner: $owner, name: $repo) {
-			pullRequest(number: $number) {
-				number
-				title
-				state
-				mergeable
-				isInMergeQueue
-				mergeQueueEntry {
-					state
-					position
-				}
-				commits(last: 1) {
-					nodes {
-						commit {
-							statusCheckRollup {
-								contexts(first: 100) {
-									nodes {
-										__typename
-										... on CheckRun {
-											name
-											status
-											conclusion
-											detailsUrl
-										}
-										... on StatusContext {
-											context
-											state
-											targetUrl
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-				reviews(last: 50) {
-					nodes {
-						author { login }
-						state
-						body
-					}
-				}
-				comments(last: 50) {
-					nodes {
-						id
-						author { login }
-						body
-						createdAt
-					}
-				}
-			}
+			pullRequest(number: $number) { ...prFields }
 		}
-	}`
+	}
+	` + fragment
 
 	variables := map[string]interface{}{
 		"owner":  owner,
 		"repo":   repo,
 		"number": number,
+		"last":   50,
 	}
 
-	var resp graphQLResponse
+	var resp struct {
+		Repository struct {
+			PullRequest node
+		}
+	}
 	if err := client.Do(query, variables, &resp); err != nil {
 		return nil, fmt.Errorf("querying PR state: %w", err)
 	}
 
-	pr := resp.Repository.PullRequest
+	return resp.Repository.PullRequest.toState(), nil
+}
 
+func (pr node) toState() *State {
 	state := &State{
 		Number:       pr.Number,
 		Title:        pr.Title,
 		Status:       stateToStatus(pr.State),
+		IsDraft:      pr.IsDraft,
 		Mergeable:    pr.Mergeable,
 		InMergeQueue: pr.IsInMergeQueue || pr.MergeQueueEntry != nil,
 	}
@@ -158,8 +182,15 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 		state.MergeQueueState = pr.MergeQueueEntry.State
 		state.MergeQueuePosition = pr.MergeQueueEntry.Position
 	}
+	if pr.AutoMergeRequest != nil {
+		state.AutoMerge = &AutoMerge{MergeMethod: pr.AutoMergeRequest.MergeMethod}
+		if pr.AutoMergeRequest.EnabledBy != nil {
+			state.AutoMerge.EnabledBy = pr.AutoMergeRequest.EnabledBy.Login
+		}
+	}
 
 	if len(pr.Commits.Nodes) > 0 {
+		state.HeadSHA = pr.Commits.Nodes[0].Commit.OID
 		contexts := pr.Commits.Nodes[0].Commit.StatusCheckRollup.Contexts.Nodes
 		for _, ctx := range contexts {
 			if ctx.TypeName == "CheckRun" {
@@ -182,6 +213,7 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 
 	for _, r := range pr.Reviews.Nodes {
 		state.Reviews = append(state.Reviews, Review{
+			ID:     r.ID,
 			Author: r.Author.Login,
 			State:  r.State,
 			Body:   r.Body,
@@ -193,11 +225,12 @@ func (f *GraphQLFetcher) Fetch(owner, repo string, number int) (*State, error) {
 			ID:        c.ID,
 			Author:    c.Author.Login,
 			Body:      c.Body,
+			URL:       c.URL,
 			CreatedAt: c.CreatedAt,
 		})
 	}
 
-	return state, nil
+	return state
 }
 
 func stateToStatus(s string) string {

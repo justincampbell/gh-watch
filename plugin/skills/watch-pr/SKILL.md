@@ -47,7 +47,15 @@ Run with the **Monitor tool** (not `Bash` with `run_in_background`). Each stdout
 - `description`: `PR $ARGUMENTS state changes`
 - `persistent`: `true` (no timeout — stop with `TaskStop` or end of session)
 
+**Watch a set of PRs defined by a search** (e.g. every open PR you have, or every PR with a given label). The query is re-run each poll, so new PRs join and merged ones leave without restarting:
+
+- `command`: `gh watch pr --search "author:@me is:open" --events ready-for-review,auto-merge-enabled,merge-conflict-changed,ci-failed,pr-merged,pr-added --ignore-check "Lint*" --resume`
+- `description`: `My open PRs`
+- `persistent`: `true`
+
 If no PR number is provided, the PR for the current branch is detected automatically. To watch a PR in another repo, prefix the command with `GH_REPO=owner/repo` (the `pr` subcommand takes a number, not a URL).
+
+**Re-arming an expired monitor:** pass `--resume` every time you start a watch you may need to restart. A restarted `--resume` watch reports everything that changed while it wasn't running instead of a fresh `initial-state`, so nothing is lost when a monitor times out and you start it again with the same command.
 
 ## Flags
 
@@ -56,6 +64,10 @@ If no PR number is provided, the PR for the current branch is detected automatic
 | `--interval <duration>` | Polling interval | `60s` |
 | `--exit` | Exit after any state change | `false` |
 | `--exit-on <events>` | Exit after specific event types (comma-separated) | |
+| `--events <events>` | Only emit these event types; `initial-state`, terminal, and `--exit-on` events always come through | all |
+| `--search <query>` | Watch every PR in the repo matching the query (no PR number) | |
+| `--ignore-check <glob>` | Ignore noisy checks (repeatable; `*` matches across `/`) | |
+| `--resume` | Report what changed since the last run of this same watch | `false` |
 
 ## Event types
 
@@ -63,15 +75,24 @@ If no PR number is provided, the PR for the current branch is detected automatic
 |-------|-------------|
 | `initial-state` | Snapshot of PR state at the moment watching started (always emitted first) |
 | `ci-passed` | All CI checks passed |
-| `ci-failed` | CI failed (at least one check failed) |
+| `ci-failed` | CI failed, confirmed on two consecutive polls of the same head commit (so it arrives one interval late, but brief false failures are dropped). `details.sha` is the head; `details.failed` lists every confirmed failure with its conclusion, `new: true` on the ones just confirmed |
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
-| `merge-conflict-changed` | Mergeable state changed |
+| `comment-edited` | An existing comment's body changed (bots that re-review by editing their summary comment fire this, not `comment-added`). `details.url` links to the comment for the full body |
+| `merge-conflict-changed` | Mergeable settled to a different value (MERGEABLE ↔ CONFLICTING) |
+| `ready-for-review` | Draft marked ready for review |
+| `converted-to-draft` | PR converted back to draft |
+| `auto-merge-enabled` | Auto-merge armed |
+| `auto-merge-disabled` | Auto-merge disarmed |
+| `pr-added` | A PR started matching `--search` |
+| `pr-removed` | An open PR stopped matching `--search` |
 | `merge-queue-entered` | PR was added to the merge queue |
 | `merge-queue-status-changed` | Merge queue entry changed state (e.g. `AWAITING_CHECKS` → `UNMERGEABLE`) |
 | `merge-queue-removed` | PR left the merge queue without merging (e.g. kicked out on failure) |
-| `pr-merged` | PR was merged (terminal — always exits) |
-| `pr-closed` | PR was closed (terminal — always exits) |
+| `pr-merged` | PR was merged (terminal — exits, except under `--search`) |
+| `pr-closed` | PR was closed (terminal — exits, except under `--search`) |
+
+Every PR event carries `details.number`, which is how you tell PRs apart under `--search`.
 
 ## Output format
 
