@@ -169,7 +169,8 @@ The first event emitted is always `initial-state` — a snapshot of the resource
 | `ci-passed` | All required checks are passing |
 | `ci-failed` | A check failed. It's reported once the same failure shows up on two polls in a row for the same head commit, which filters out the brief false failures some CI providers post for superseded runs (so it arrives one interval after the failure). One event per poll: `sha` is the head commit, `name`/`conclusion`/`url` describe the first newly confirmed failure, and `failed` lists every confirmed failure with `new` marking the ones just confirmed |
 | `review-submitted` | A review was submitted |
-| `comment-added` | A new comment was posted |
+| `comment-added` | A new comment was posted (`id`, `author`, `body` trimmed to 200 chars, `url`) |
+| `comment-edited` | An existing comment's body changed, e.g. a review bot updating its summary in place instead of posting a new one. Same details as `comment-added` |
 | `merge-conflict-changed` | The PR's mergeable state settled to a different value (MERGEABLE ↔ CONFLICTING). The UNKNOWN blips GitHub shows while it recomputes after every merge to the base branch are ignored |
 | `ready-for-review` | A draft PR was marked ready for review |
 | `converted-to-draft` | The PR was converted back to a draft |

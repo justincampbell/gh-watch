@@ -42,6 +42,7 @@ type Comment struct {
 	ID        string
 	Author    string
 	Body      string
+	URL       string
 	CreatedAt time.Time
 }
 

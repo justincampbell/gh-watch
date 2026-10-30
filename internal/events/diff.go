@@ -76,20 +76,32 @@ func diffPR(old, new *pr.State) []Event {
 		}
 	}
 
-	seenComments := make(map[string]bool, len(old.Comments))
+	oldBodies := make(map[string]string, len(old.Comments))
 	for _, c := range old.Comments {
-		seenComments[c.ID] = true
+		oldBodies[c.ID] = c.Body
 	}
 	for _, comment := range new.Comments {
-		if !seenComments[comment.ID] {
+		oldBody, seen := oldBodies[comment.ID]
+		details := map[string]interface{}{
+			"id":     comment.ID,
+			"author": comment.Author,
+			"body":   truncate(comment.Body, 200),
+			"url":    comment.URL,
+		}
+		switch {
+		case !seen:
 			events = append(events, Event{
 				Timestamp: now,
 				Event:     CommentAdded,
 				Summary:   fmt.Sprintf("Comment from %s: %s", comment.Author, truncate(comment.Body, 80)),
-				Details: map[string]interface{}{
-					"author": comment.Author,
-					"body":   truncate(comment.Body, 200),
-				},
+				Details:   details,
+			})
+		case oldBody != comment.Body:
+			events = append(events, Event{
+				Timestamp: now,
+				Event:     CommentEdited,
+				Summary:   fmt.Sprintf("Comment from %s edited: %s", comment.Author, truncate(comment.Body, 80)),
+				Details:   details,
 			})
 		}
 	}

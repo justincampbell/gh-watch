@@ -78,6 +78,7 @@ If no PR number is provided, the PR for the current branch is detected automatic
 | `ci-failed` | CI failed, confirmed on two consecutive polls of the same head commit (so it arrives one interval late, but brief false failures are dropped). `details.sha` is the head; `details.failed` lists every confirmed failure with its conclusion, `new: true` on the ones just confirmed |
 | `review-submitted` | A review was submitted |
 | `comment-added` | A new comment was posted |
+| `comment-edited` | An existing comment's body changed (bots that re-review by editing their summary comment fire this, not `comment-added`). `details.url` links to the comment for the full body |
 | `merge-conflict-changed` | Mergeable settled to a different value (MERGEABLE ↔ CONFLICTING) |
 | `ready-for-review` | Draft marked ready for review |
 | `converted-to-draft` | PR converted back to draft |

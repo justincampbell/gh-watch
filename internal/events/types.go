@@ -17,6 +17,7 @@ const (
 	CIFailed                EventType = "ci-failed"
 	ReviewSubmitted         EventType = "review-submitted"
 	CommentAdded            EventType = "comment-added"
+	CommentEdited           EventType = "comment-edited"
 	MergeConflictChanged    EventType = "merge-conflict-changed"
 	ReadyForReview          EventType = "ready-for-review"
 	ConvertedToDraft        EventType = "converted-to-draft"
@@ -36,7 +37,7 @@ const (
 
 // Selectable lists the event types accepted by --events.
 var Selectable = []EventType{
-	CIAllPassed, CIFailed, ReviewSubmitted, CommentAdded, MergeConflictChanged,
+	CIAllPassed, CIFailed, ReviewSubmitted, CommentAdded, CommentEdited, MergeConflictChanged,
 	ReadyForReview, ConvertedToDraft, AutoMergeEnabled, AutoMergeDisabled,
 	MergeQueueEntered, MergeQueueStatusChanged, MergeQueueRemoved,
 	PRMerged, PRClosed, PRAdded, PRRemoved, NewCommit, TagCreated,

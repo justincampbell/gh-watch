@@ -541,3 +541,22 @@ func TestDiff_CIFailed_OneEventListsAllFailures(t *testing.T) {
 		t.Errorf("unexpected new flags: %v", failed)
 	}
 }
+
+func TestDiff_CommentEdited(t *testing.T) {
+	old := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{
+		{ID: "c1", Author: "review-bot", Body: "Summary\n\nLast reviewed commit: abc"},
+		{ID: "c2", Author: "bob", Body: "unchanged"},
+	}}
+	new := &pr.State{Number: 1, Status: "open", Comments: []pr.Comment{
+		{ID: "c1", Author: "review-bot", Body: "Summary\n\nLast reviewed commit: def", URL: "https://example.com/c1"},
+		{ID: "c2", Author: "bob", Body: "unchanged"},
+	}}
+	events := Diff(old, new)
+	if len(events) != 1 || events[0].Event != CommentEdited {
+		t.Fatalf("expected one CommentEdited, got %v", events)
+	}
+	d := events[0].Details
+	if d["id"] != "c1" || d["author"] != "review-bot" || d["number"] != 1 || d["url"] != "https://example.com/c1" {
+		t.Errorf("unexpected details: %v", d)
+	}
+}

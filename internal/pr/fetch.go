@@ -70,6 +70,7 @@ type node struct {
 			ID        string
 			Author    struct{ Login string }
 			Body      string
+			URL       string
 			CreatedAt time.Time
 		}
 	}
@@ -130,6 +131,7 @@ const fragment = `fragment prFields on PullRequest {
 			id
 			author { login }
 			body
+			url
 			createdAt
 		}
 	}
@@ -223,6 +225,7 @@ func (pr node) toState() *State {
 			ID:        c.ID,
 			Author:    c.Author.Login,
 			Body:      c.Body,
+			URL:       c.URL,
 			CreatedAt: c.CreatedAt,
 		})
 	}
